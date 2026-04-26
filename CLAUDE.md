@@ -57,6 +57,7 @@ Style: system fonts, max-width `960px`, cards with `border-radius: 12px`, Chart.
 | [car](/.claude/skills/car.md) | island.is | Vehicle lookup by plate/VIN via public GraphQL API |
 | [gengi](/.claude/skills/gengi.md) | Borgun | Currency exchange rates (card rates, not interbank) |
 | [laun](/.claude/skills/laun.md) | payday.is | Take-home salary calculator with tax/pension breakdown |
+| [ruv](/.claude/skills/ruv.md) | RÚV (Icelandic State Broadcasting) | News archive, Kastljós/TV episodes with handhönnuð VTT subtitles via yt-dlp, deep-link `?t=` |
 
 ## Adding a New Skill
 

@@ -17,6 +17,11 @@ dependencies = [
     "psycopg2-binary>=2.9.11",
     "geopandas>=1.0",
     "matplotlib>=3.9",
+    "rasterio>=1.3",
+    "numpy>=1.26",
+    "pyproj>=3.6",
+    "shapely>=2.0",
+    "psutil>=5.9",
 ]
 
 [project.scripts]

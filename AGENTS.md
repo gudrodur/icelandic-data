@@ -321,20 +321,53 @@ are auto-disabled after 60 days of repository inactivity (GitHub never defines
 history commits are genuine activity and plausibly hold that clock off, but
 that is inference, not a documented contract — so it is not the safety net.
 
-The safety net is a dead-man's-switch: something *outside* GitHub that alerts on
-the **absence** of a ping. `source-health.yml` has the step wired; it stays
-inert (skipped) until the secret exists:
+The safety net is a dead-man's-switch: something *outside* GitHub that notices
+the **absence** of observations.
 
-```bash
-# healthchecks.io free tier: create a check, period 1 day, grace ~2h
-gh secret set HEALTH_PING_URL --body "https://hc-ping.com/<uuid>"
-```
+**Live mechanism — pull, from the mac-mini** (`solberg.club`):
 
-It fires whenever the probes **ran and recorded**, whatever the verdict — not on
-job success. Those are different questions: a legitimately dead source failing
-the job must not silence the switch, or "a source is down" (already reported,
-with detail) gets conflated with "the monitor stopped" (nobody is watching at
-all). Silence should mean exactly one thing.
+| | |
+|---|---|
+| Script | `~/clawd/bin/icelandic-data-dms.sh` |
+| Schedule | `~/Library/LaunchAgents/com.jokull.icelandic-data-dms.plist` (every 6h) |
+| Logs | `~/clawd/logs/icelandic-data-dms.log` |
+| Alert | Telegram via `openclaw message send` |
+
+It polls the GitHub API for the age of the last commit on `health-history`. Over
+36h (two missed runs, allowing for cron drift) → Telegram alert, with a 20h
+cooldown so it nags once a day rather than once a run. It sends an all-clear on
+recovery, and stays silent when healthy.
+
+It watches **the monitor, not the sources** — "is anyone still watching?" Source
+health is already answered, with detail, by the workflow. Keep that separation:
+a switch that also opines on source health is a switch that can cry wolf.
+
+Pull beats push here: it needs no inbound ingress and no secret, and it catches
+the auto-disable case (where the workflow never runs to push anything) that a
+push-ping structurally cannot.
+
+Three properties worth preserving if you touch it:
+
+- **Unreachable ≠ stale.** If the API can't be reached after 3 tries it logs
+  UNKNOWN and stays silent — the likeliest cause is the mini's own network, and
+  alerting on that trains you to ignore it. (This fired on the very first
+  launchd run; the retry recovered on attempt 2.)
+- **It never stamps the cooldown on a failed send.** Otherwise a deaf switch
+  silences itself for 20h while nobody knows anything is wrong.
+- **It pins node explicitly.** `node` here is fnm-managed at a per-shell path
+  that does not exist under launchd; the `openclaw` shim then resolves a
+  different node and dies on a native sqlite ABI mismatch. The script pins the
+  same interpreter + entrypoint as `ai.openclaw.gateway.plist`. Keep them in
+  step across openclaw upgrades.
+
+**Optional alternative — push.** `source-health.yml` also has an inert ping step
+for anyone without the mini; set `HEALTH_PING_URL` (e.g. healthchecks.io) to
+enable. It fires when the probes **ran and recorded**, whatever the verdict —
+never on job success, or a legitimately dead source would silence the switch.
+
+**Residual blind spot:** the switch depends on the mini and its Gateway being up.
+If the mini dies, nothing alerts. That is accepted — you would notice — but it
+is where the turtles stop.
 
 ## Scripts layout
 

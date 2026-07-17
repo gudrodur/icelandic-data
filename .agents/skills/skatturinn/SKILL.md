@@ -9,7 +9,7 @@ Company registry and annual reports (ársreikningar) from the Icelandic tax auth
 
 ## Overview
 
-Skatturinn operates the Company Registry (Fyrirtækjaskrá) and Annual Reports Registry (Ársreikningaskrá). Annual reports are available free of charge since January 1, 2021, but require browser automation to download due to a shopping cart workflow with anti-bot measures.
+Skatturinn operates the Company Registry (Fyrirtækjaskrá) and Annual Reports Registry (Ársreikningaskrá). Annual reports are free of charge since January 1, 2021. Downloading goes through a server-side shopping cart, but **no browser is required** — the cart is cookie/viewstate state that `httpx` handles directly. See "Access Method" below.
 
 **Use case:** Map company ownership chains by extracting beneficial owners from annual reports, then recursively looking up parent company reports.
 
@@ -58,19 +58,33 @@ Reports contain:
 - **Shareholders (Hluthafar):** For smaller companies
 - Notes on related party transactions
 
-## Access Method: Playwright
+## Access Method: plain HTTP (httpx) — no browser
 
-No public API exists for downloading annual reports. The website uses a shopping cart system that requires JavaScript interaction.
+No public API exists for downloading annual reports; the site drives a
+server-side shopping cart. But **it does not need a browser.** `scripts/skatturinn.py`
+imports no browser library at all — the whole flow, download included, is httpx
+plus ASP.NET viewstate handling:
+
+```
+GET  /fyrirtaekjaskra/leit/kennitala/{kt}   -> scrape company + report rows
+GET  addToCart?itemid=…&typeid=…            -> cart id (kid)
+GET  cart page                              -> extract __VIEWSTATE
+POST cart page                              -> ZIP/PDF bytes
+```
+
+The cart is session state in cookies, not JavaScript. `httpx.AsyncClient` keeps
+the cookie jar across those calls, which is all it ever needed.
 
 ### Setup
 
 ```bash
-# Install dependencies (already in pyproject.toml)
 uv sync
-
-# Install Chromium browser
-uv run playwright install chromium
 ```
+
+That is the whole setup. **Do not install Chromium for this skill** — earlier
+versions of this file told you to, and it was wrong for long enough to mislead
+both a human and an agent into planning browser-only monitoring.
+`tests/health/test_skatturinn.py` is a plain HTTP probe for the same reason.
 
 ### Page Structure (Verified)
 
@@ -266,7 +280,7 @@ The first 6 digits encode the registration date. Century determined by 9th digit
 
 5. **Terms of service:** No explicit prohibition on automated access, but bulk scraping may trigger blocks. Consider contacting fyrirtaekjaskra@skatturinn.is for data access agreements.
 
-6. **Session cookies:** The shopping cart requires maintaining session state. Don't create new browser contexts between adding items and downloading.
+6. **Session cookies:** The shopping cart requires maintaining session state. Reuse one `httpx.AsyncClient` (and therefore one cookie jar) across addToCart → cart → download; a fresh client between those steps loses the cart.
 
 ## Evidence Integration
 

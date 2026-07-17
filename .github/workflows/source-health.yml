@@ -141,6 +141,23 @@ jobs:
           done
           echo "::warning::could not push health history after 3 attempts"
 
+      # Refresh the README's per-source light panel. Commits to main ONLY when a
+      # light actually changes, which is rare — so main does not collect a daily
+      # bot commit, but the panel is never stale. (A GITHUB_TOKEN push does not
+      # trigger workflows, so this cannot loop.)
+      - name: Refresh README panel
+        run: |
+          set -euo pipefail
+          uv run python scripts/health_panel.py --history .history/history.jsonl
+          if git diff --quiet README.md; then
+            echo "panel unchanged"; exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit --quiet -m "docs: refresh source health panel"
+          git push --quiet origin HEAD:main || echo "::warning::could not push README panel"
+
       # The gate. Judges over the window, not over today:
       #   dead   = 3+ consecutive failures
       #   broken = 2+ consecutive structural failures (the skill needs updating)

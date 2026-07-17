@@ -34,94 +34,97 @@ Currently 45 skills covering national statistics, government dashboards
 `description` is its index entry — run `ls .agents/skills/` to enumerate them, and see
 [`AGENTS.md`](AGENTS.md) for the quick-commands reference.
 
-<a href="https://github.com/jokull/icelandic-data/actions/workflows/source-health.yml">
-  <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/panel.svg" alt="Source health: current verdict per data source" width="660">
-</a>
-
-Refreshed daily. 🟢 healthy · 🟡 flaky (failed but recovered — these APIs blink) ·
-🔴 dead, or the skill no longer matches the source · ⚪ not enough observations yet.
-Finer-grained than the badge above, which waits a full week before going red. Hover a
-dot for uptime and the last error. Some skills have
-[nothing upstream to probe](tests/health/README.md#skills-with-no-upstream-to-probe)
-and are absent.
+The light in each row is that source's current verdict, refreshed daily and finer-grained
+than the badge above (which waits a full week before going red):
+<img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/_legend_healthy.svg" width="10"> healthy ·
+<img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/_legend_flaky.svg" width="10"> flaky (failed but recovered — these APIs blink) ·
+<img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/_legend_dead.svg" width="10"> dead, or the skill no longer matches the source ·
+<img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/_legend_unknown.svg" width="10"> not enough observations yet.
+A `·` means there is [nothing upstream to probe](tests/health/README.md#skills-with-no-upstream-to-probe).
+Per-source uptime and last error are in the
+[workflow summary](https://github.com/jokull/icelandic-data/actions/workflows/source-health.yml).
 
 ### Statistics & macroeconomic
 
-| Source | Description |
-|--------|-------------|
-| Hagstofa Íslands | PX-Web API — economic, demographic, trade, income series |
-| Seðlabanki | SDMX API — monetary policy, financial stability, FX history via ECB |
-| Tekjusagan | Income-history dashboard — 5 Power BI report routes (Forsætisráðuneytið) |
-| Velsældarvísar | Hagstofa indicator catalogs — well-being + social + cultural (88 indicators → 77 PX tables) |
-| Heimsmarkmið | UN SDG national statistics — 137 indicators across all 17 goals (open-sdg ZIP bundle) |
-| Ríkisreikningur | State accounts — yearly afkoma 2015+, málefnasvið breakdowns, 35 published files (Azure Functions API) |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/hagstofan.svg" width="12"> | Hagstofa Íslands | PX-Web API — economic, demographic, trade, income series |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/sedlabanki.svg" width="12"> | Seðlabanki | SDMX API — monetary policy, financial stability, FX history via ECB |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/tekjusagan.svg" width="12"> | Tekjusagan | Income-history dashboard — 5 Power BI report routes (Forsætisráðuneytið) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/velsaeldarvisar.svg" width="12"> | Velsældarvísar | Hagstofa indicator catalogs — well-being + social + cultural (88 indicators → 77 PX tables) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/heimsmarkmid.svg" width="12"> | Heimsmarkmið | UN SDG national statistics — 137 indicators across all 17 goals (open-sdg ZIP bundle) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/rikisreikningur.svg" width="12"> | Ríkisreikningur | State accounts — yearly afkoma 2015+, málefnasvið breakdowns, 35 published files (Azure Functions API) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/fjarlog.svg" width="12"> | Fjárlög | State budget appropriations + 5-year plan at málaflokkur level (actual / enacted / bill) |
 
 ### Government dashboards (_mælaborð_)
 
 Systematic coverage of public dashboards published under Iceland's data-access law.
 
-| Source | Description |
-|--------|-------------|
-| Landlæknir | 33 Directorate-of-Health Power BI dashboards + Talnabrunnur PDFs |
-| Vinnumálastofnun | Registered unemployment — Power BI + monthly Excel |
-| Farsæld barna | Child-wellbeing dashboard (static-data Power BI) |
-| Mælaborð landbúnaðarins | 3 Power BI dashboards — subsidies, livestock, markets |
-| Ferðamálastofa | Keflavík passengers, flights, accommodation — Power BI scraping |
-| Umferð (Vegagerðin) | 168+ traffic counters — real-time 15-min + 7-day rolling daily |
-| Byggðastofnun | Regional-development dashboards — 11 Tableau Public embeds (population, income, energy, grants) |
-| Vernd (Ríkislögreglustjóri) | Asylum / international-protection monthly stats — Power BI |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/landlaeknir.svg" width="12"> | Landlæknir | 33 Directorate-of-Health Power BI dashboards + Talnabrunnur PDFs |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/vinnumalastofnun.svg" width="12"> | Vinnumálastofnun | Registered unemployment — Power BI + monthly Excel |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/farsaeld_barna.svg" width="12"> | Farsæld barna | Child-wellbeing dashboard (static-data Power BI) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/maelabord_landbunadarins.svg" width="12"> | Mælaborð landbúnaðarins | 3 Power BI dashboards — subsidies, livestock, markets |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/ferdamalastofa.svg" width="12"> | Ferðamálastofa | Keflavík passengers, flights, accommodation — Power BI scraping |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/umferd.svg" width="12"> | Umferð (Vegagerðin) | 168+ traffic counters — real-time 15-min + 7-day rolling daily |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/byggdastofnun.svg" width="12"> | Byggðastofnun | Regional-development dashboards — 11 Tableau Public embeds (population, income, energy, grants) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/vernd.svg" width="12"> | Vernd (Ríkislögreglustjóri) | Asylum / international-protection monthly stats — Power BI |
 
 ### Business & markets
 
-| Source | Description |
-|--------|-------------|
-| Skatturinn | Annual reports (ársreikningar), company registry, ownership chains |
-| Financials | PDF-to-structured extraction via `pdfplumber` + Claude interpretation |
-| Nasdaq Iceland | Exchange notices, annual reports, insider trading |
-| Insurance | 4 insurers (Sjóvá, Skagi/VÍS, TM, Vörður), combined ratios, Nordic comparison |
-| Fuel | Gasvaktin prices + conglomerate financials for N1/Olís/Orkan/Atlantsolía |
-| Maskína | Public-opinion polls via Tableau Public VizQL + WordPress API |
-| Opnir reikningar | Government invoices by org/vendor/type, 2017–present |
-| Tenders | 3,494+ public tenders via TED API + OCDS bulk data |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/skatturinn.svg" width="12"> | Skatturinn | Annual reports (ársreikningar), company registry, ownership chains |
+| · | Financials | PDF-to-structured extraction via `pdfplumber` + Claude interpretation |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/nasdaq.svg" width="12"> | Nasdaq Iceland | Exchange notices, annual reports, insider trading |
+| · | Insurance | 4 insurers (Sjóvá, Skagi/VÍS, TM, Vörður), combined ratios, Nordic comparison |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/fuel.svg" width="12"> | Fuel | Gasvaktin prices + conglomerate financials for N1/Olís/Orkan/Atlantsolía |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/maskina.svg" width="12"> | Maskína | Public-opinion polls via Tableau Public VizQL + WordPress API |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/opnirreikningar.svg" width="12"> | Opnir reikningar | Government invoices by org/vendor/type, 2017–present |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/tenders.svg" width="12"> | Tenders | 3,494+ public tenders via TED API + OCDS bulk data |
 
 ### Property, planning, addresses
 
-| Source | Description |
-|--------|-------------|
-| HMS | Kaupskrá fasteigna (222k transactions, geocoded) + Landeignaskrá (89k parcel polygons) |
-| Skipulagsmál (Planitor) | Planning & building permits — cases, minutes, entities, nearby search across 5 municipalities |
-| iceaddr | Icelandic address geocoding (bundled SQLite from Staðfangaskrá) |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/hms.svg" width="12"> | HMS | Kaupskrá fasteigna (222k transactions, geocoded) + Landeignaskrá (89k parcel polygons) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/skipulagsmal.svg" width="12"> | Skipulagsmál (Planitor) | Planning & building permits — cases, minutes, entities, nearby search across 5 municipalities |
+| · | iceaddr | Icelandic address geocoding (bundled SQLite from Staðfangaskrá) |
 
 ### Transport & mobility
 
-| Source | Description |
-|--------|-------------|
-| Samgöngustofa | Vehicle registrations by make, fuel type, location — Power BI |
-| car (island.is) | Per-vehicle lookup by plate/VIN via public GraphQL API |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/samgongustofa.svg" width="12"> | Samgöngustofa | Vehicle registrations by make, fuel type, location — Power BI |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/car.svg" width="12"> | car (island.is) | Per-vehicle lookup by plate/VIN via public GraphQL API |
 
 ### Environment & geography
 
-| Source | Description |
-|--------|-------------|
-| Veður | Met-Office XML API — observations, forecasts, climatology |
-| Loftgæði | UST air quality — PM10/PM2.5/NO2/H2S, 57 stations, hourly |
-| CO2 (co2.is) | Climate action plan — 106 numbered actions across 4 kerfi, status + ministry + year tracking |
-| LMI | Vector geodata via GeoServer WFS — coastline, roads, rivers, glaciers |
-| Kortagerð | Iceland map generation — matplotlib (static) + Leaflet (interactive) |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/vedur.svg" width="12"> | Veður | Met-Office JSON API — observations, stations, forecasts, earthquakes |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/loftgaedi.svg" width="12"> | Loftgæði | UST air quality — PM10/PM2.5/NO2/H2S, 57 stations, hourly |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/co2.svg" width="12"> | CO2 (co2.is) | Climate action plan — 106 numbered actions across 4 kerfi, status + ministry + year tracking |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/lmi.svg" width="12"> | LMI | Vector geodata via GeoServer WFS — coastline, roads, rivers, glaciers |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/lmi_hrl.svg" width="12"> | LMI HRL | Copernicus High Resolution Layers via LMI — grassland, imperviousness (20 m raster) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/natt.svg" width="12"> | Náttúrufræðistofnun | Habitat-type polygons (vistgerðir) via WFS |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/eea_sdi.svg" width="12"> | EEA SDI | European Environment Agency geospatial catalogue (GeoNetwork 4.4) |
+| · | Kortagerð | Iceland map generation — matplotlib (static) + Leaflet (interactive) |
 
 ### Personal finance & rates
 
-| Source | Description |
-|--------|-------------|
-| Laun (payday.is) | Take-home salary calculator with tax/pension breakdown |
-| Gengi (Borgun) | Currency exchange rates (card rates, not interbank) |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/laun.svg" width="12"> | Laun (payday.is) | Take-home salary calculator with tax/pension breakdown |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/gengi.svg" width="12"> | Gengi (Borgun) | Currency exchange rates (card rates, not interbank) |
 
 ### Legal & civic
 
-| Source | Description |
-|--------|-------------|
-| Dómstólar | Court rulings — Héraðsdómstólar, Landsréttur, Hæstiréttur via RSS + scraping |
-| Reykjavíkurborg | CKAN + PX-Web APIs for municipal services, demographics, welfare, Opin Fjármál |
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/domstolar.svg" width="12"> | Dómstólar | Court rulings — Héraðsdómstólar, Landsréttur, Hæstiréttur via RSS + scraping |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/reykjavik.svg" width="12"> | Reykjavíkurborg | CKAN + PX-Web APIs for municipal services, demographics, welfare, Opin Fjármál |
 
 ## Setup
 

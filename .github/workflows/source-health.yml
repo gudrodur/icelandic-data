@@ -131,15 +131,15 @@ jobs:
           fi
           echo "recorded $((after - before)) observation(s)"
 
-      # Badge + light panel. Both are written onto the health-history branch, and
-      # the README only ever holds URLs pointing at them — so they refresh daily
-      # without a single commit to main. The artifact is deanchored from the
-      # codebase; main's history stays about the project, not about lights.
+      # Badge + per-source lights. Both are written onto the health-history branch,
+      # and the README only ever holds URLs pointing at them — so they refresh
+      # daily without a single commit to main. The artifacts are deanchored from
+      # the codebase; main's history stays about the project, not about lights.
       #
-      # Badge = the headline, 7-day bar, for a stranger. Panel = the detail view,
-      # current verdict per source, for someone checking the one source they care
-      # about.
-      - name: Refresh badge + panel
+      # Badge = the headline, 7-day bar, for a stranger deciding whether to trust
+      # the repo. Dots = one light per source, rendered inline in the README's
+      # own source tables, for someone checking the one source they care about.
+      - name: Refresh badge + lights
         run: |
           uv run python scripts/health_verdict.py \
             --history .history/history.jsonl \
@@ -147,7 +147,7 @@ jobs:
             > /dev/null || true
           uv run python scripts/health_panel.py \
             --history .history/history.jsonl \
-            -o .history/panel.svg
+            -o .history/dots
 
       # Push before judging, so a gating verdict never costs us the datapoint.
       # These commits are also genuine repository activity, which plausibly
@@ -160,7 +160,8 @@ jobs:
           cd .history
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add history.jsonl badge.json panel.svg
+          git rm -q --ignore-unmatch panel.svg
+          git add history.jsonl badge.json dots
           git commit --quiet -m "health: $(date -u +%Y-%m-%dT%H:%MZ)" || {
             echo "nothing to commit"; exit 0;
           }

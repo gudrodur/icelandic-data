@@ -1,75 +1,44 @@
-"""Render the source-health light panel as an SVG.
+"""Render one status light per source, as a tiny standalone SVG dot.
 
-Deanchored from the codebase on purpose. The SVG is written to the
-`health-history` branch next to `history.jsonl` and `badge.json`, and the README
-just points an <img> at its raw URL. So the panel refreshes daily without a
-single commit to main — no bot noise in the history of the actual project, and
-nothing to review. Same trick as the shields badge above it.
+The lights live in the README's own source tables — a coloured dot in the first
+column of the row that already describes the source, so you read "what is this"
+and "is it up" in one glance instead of cross-referencing a separate panel
+against a table.
 
-    uv run python scripts/health_panel.py --history health/history.jsonl -o panel.svg
+The obvious way to do that is to write emoji into the markdown and re-commit the
+README nightly. That is rejected on purpose: it would put a daily bot commit on
+main forever, and main's history should be about the project, not about lights.
 
-The badge is the headline (one light, 7-day bar, for a stranger deciding whether
-to trust the repo). This is the detail view: the current verdict per source, for
-someone checking the one source they actually care about.
+So each dot is an <img> instead. The pixels live on the `health-history` branch
+next to history.jsonl and badge.json; the README holds nothing but static URLs
+pointing at them. The lights change daily, the README never does — the artifact
+is deanchored from the codebase. Same trick as the shields badge.
 
-Plain shapes and text only — GitHub sanitises SVG and strips scripts, and camo
-proxies it. Colours are picked to read on both light and dark backgrounds, since
-an <img> cannot see the viewer's theme.
+    uv run python scripts/health_panel.py --history health/history.jsonl -o dots/
+
+One consequence, accepted: an <img> is opaque, so the SVG's <title> never
+surfaces as a tooltip and a dot cannot carry its own uptime/error detail. The
+badge is the headline and the workflow summary is the detail view; these are
+just the lights. Keeping the README static is worth more than a hover.
+
+A dot is emitted for every known probe, not just those with history — a source
+that has never reported still needs a file at its URL, or the README renders a
+broken-image icon, which reads as "this repo is unmaintained" rather than "this
+source has no observations yet".
 """
 from __future__ import annotations
 
 import argparse
 import pathlib
 import sys
-from datetime import datetime, timezone
-from xml.sax.saxutils import escape
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 from scripts.health_verdict import judge_all, load  # noqa: E402
 
-# Probe name -> display name. Probes are machine names (`umferd`); humans read
-# "Umferð". Anything not listed renders under its probe name.
-DISPLAY = {
-    "hagstofan": "Hagstofa Íslands",
-    "sedlabanki": "Seðlabanki",
-    "tekjusagan": "Tekjusagan",
-    "velsaeldarvisar": "Velsældarvísar",
-    "heimsmarkmid": "Heimsmarkmið",
-    "rikisreikningur": "Ríkisreikningur",
-    "landlaeknir": "Landlæknir",
-    "vinnumalastofnun": "Vinnumálastofnun",
-    "farsaeld_barna": "Farsæld barna",
-    "maelabord_landbunadarins": "Mælaborð landb.",
-    "ferdamalastofa": "Ferðamálastofa",
-    "umferd": "Umferð",
-    "byggdastofnun": "Byggðastofnun",
-    "vernd": "Vernd",
-    "skatturinn": "Skatturinn",
-    "nasdaq": "Nasdaq Iceland",
-    "fuel": "Fuel",
-    "maskina": "Maskína",
-    "opnirreikningar": "Opnir reikningar",
-    "tenders": "Tenders",
-    "hms": "HMS",
-    "skipulagsmal": "Skipulagsmál",
-    "samgongustofa": "Samgöngustofa",
-    "car": "car (island.is)",
-    "vedur": "Veður",
-    "loftgaedi": "Loftgæði",
-    "co2": "CO2",
-    "lmi": "LMI",
-    "lmi_hrl": "LMI HRL",
-    "natt": "Náttúrufr.stofnun",
-    "eea_sdi": "EEA SDI",
-    "laun": "Laun",
-    "gengi": "Gengi",
-    "domstolar": "Dómstólar",
-    "reykjavik": "Reykjavíkurborg",
-    "fjarlog": "Fjárlög",
-}
-
-# Mid-tone fills, legible on white and on #0d1117 alike.
+# Mid-tone fills, legible against both the light and dark GitHub themes. An
+# <img> cannot see the viewer's theme, so the colour has to work in both — no
+# prefers-color-scheme escape hatch here.
 COLOR = {
     "healthy": "#2da44e",
     "flaky": "#d29922",
@@ -78,76 +47,75 @@ COLOR = {
     "unknown": "#8b949e",
 }
 
-COLS = 3
-ROW_H = 22
-PAD = 14
-HEADER_H = 34
-COL_W = 210
-DOT_R = 5
+# Every probe in tests/health/, so a source with no history still resolves to a
+# grey dot rather than a 404. Kept as data rather than globbed from the test
+# directory: this script also runs against a history file alone.
+PROBES = [
+    "byggdastofnun", "car", "co2", "domstolar", "eea_sdi", "farsaeld_barna",
+    "ferdamalastofa", "fjarlog", "fuel", "gengi", "hagstofan", "heimsmarkmid",
+    "hms", "landlaeknir", "laun", "lmi", "lmi_hrl", "loftgaedi",
+    "maelabord_landbunadarins", "maskina", "nasdaq", "natt", "opnirreikningar",
+    "reykjavik", "rikisreikningur", "samgongustofa", "sedlabanki", "skatturinn",
+    "skipulagsmal", "tekjusagan", "tenders", "umferd", "vedur",
+    "velsaeldarvisar", "vernd", "vinnumalastofnun",
+]
+
+SIZE = 12
 
 
-def _row(x: float, y: float, label: str, color: str, title: str) -> str:
+def dot(color: str, label: str) -> str:
+    """One 12px light. Plain shapes only — GitHub sanitises SVG and camo-proxies it."""
+    r = SIZE / 2 - 1
     return (
-        f'<g><title>{escape(title)}</title>'
-        f'<circle cx="{x + DOT_R}" cy="{y - 4}" r="{DOT_R}" fill="{color}"/>'
-        f'<text x="{x + DOT_R * 2 + 8}" y="{y}" class="l">{escape(label)}</text>'
-        f"</g>"
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SIZE}" height="{SIZE}" '
+        f'viewBox="0 0 {SIZE} {SIZE}" role="img" aria-label="{label}">'
+        f'<circle cx="{SIZE / 2}" cy="{SIZE / 2}" r="{r}" fill="{color}"/>'
+        f"</svg>\n"
     )
 
 
-def render(history: pathlib.Path, window_days: int = 30) -> str:
-    verdicts = judge_all(load(history, window_days))
-    # Worst first — if something is broken, it should be the first thing seen.
-    counts = {k: sum(1 for v in verdicts if v.verdict == k) for k in COLOR}
+def render(history: pathlib.Path, out_dir: pathlib.Path, window_days: int = 30) -> dict[str, str]:
+    verdicts = {v.source: v.verdict for v in judge_all(load(history, window_days))}
 
-    rows = max(1, -(-len(verdicts) // COLS))  # ceil
-    w = PAD * 2 + COL_W * COLS
-    h = PAD * 2 + HEADER_H + rows * ROW_H
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: dict[str, str] = {}
+    for source in sorted(set(PROBES) | set(verdicts)):
+        verdict = verdicts.get(source, "unknown")
+        (out_dir / f"{source}.svg").write_text(
+            dot(COLOR.get(verdict, COLOR["unknown"]), f"{source}: {verdict}"),
+            encoding="utf-8",
+        )
+        written[source] = verdict
 
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    summary = "  ".join(
-        f"{counts[k]} {k}" for k in ("dead", "broken", "flaky", "healthy", "unknown") if counts[k]
-    )
+    # Fixed swatches for the README legend. They live here rather than as emoji
+    # in the prose so the legend and the lights can never drift apart: one
+    # COLOR map feeds both.
+    for verdict, color in COLOR.items():
+        (out_dir / f"_legend_{verdict}.svg").write_text(dot(color, verdict), encoding="utf-8")
 
-    out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
-        f'viewBox="0 0 {w} {h}" role="img" aria-label="Source health: {escape(summary)}">',
-        "<style>"
-        ".l{font:12px -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;fill:#57606a}"
-        ".h{font:600 13px -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;fill:#24292f}"
-        ".s{font:11px -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;fill:#8b949e}"
-        "@media (prefers-color-scheme:dark){.l{fill:#8b949e}.h{fill:#e6edf3}}"
-        "</style>",
-        f'<text x="{PAD}" y="{PAD + 12}" class="h">Source health</text>',
-        f'<text x="{w - PAD}" y="{PAD + 12}" class="s" text-anchor="end">{escape(stamp)}</text>',
-        f'<text x="{PAD}" y="{PAD + 27}" class="s">{escape(summary)}</text>',
-    ]
-
-    for i, v in enumerate(verdicts):
-        col, row = i % COLS, i // COLS
-        x = PAD + col * COL_W
-        y = PAD + HEADER_H + row * ROW_H + 12
-        label = DISPLAY.get(v.source, v.source)
-        note = f"{v.verdict}"
-        if v.uptime is not None:
-            note += f" · {v.uptime:.0%} of {v.observations} obs"
-        if v.last_error:
-            note += f" · {v.last_error[:80]}"
-        out.append(_row(x, y, label, COLOR.get(v.verdict, "#8b949e"), f"{label}: {note}"))
-
-    out.append("</svg>")
-    return "\n".join(out) + "\n"
+    return written
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--history", type=pathlib.Path, required=True)
-    ap.add_argument("-o", "--out", type=pathlib.Path, default=pathlib.Path("panel.svg"))
+    ap.add_argument(
+        "-o",
+        "--out",
+        type=pathlib.Path,
+        default=pathlib.Path("dots"),
+        help="directory to write <source>.svg into (default: dots/)",
+    )
     ap.add_argument("--window-days", type=int, default=30)
     args = ap.parse_args(argv)
 
-    args.out.write_text(render(args.history, args.window_days), encoding="utf-8")
-    print(f"panel -> {args.out}", file=sys.stderr)
+    written = render(args.history, args.out, args.window_days)
+
+    tally: dict[str, int] = {}
+    for verdict in written.values():
+        tally[verdict] = tally.get(verdict, 0) + 1
+    summary = ", ".join(f"{n} {k}" for k, n in sorted(tally.items(), key=lambda kv: -kv[1]))
+    print(f"{len(written)} dots -> {args.out}/  ({summary})", file=sys.stderr)
     return 0
 
 

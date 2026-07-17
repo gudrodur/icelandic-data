@@ -1,177 +1,153 @@
-"""Render per-source status lights into the README's source tables.
+"""Render the source-health light panel as an SVG.
 
-The badge at the top of the README is the headline: one light, 7-day bar, for a
-stranger deciding whether to trust the repo. This is the detail view — a light
-per source, showing the *current* verdict, for someone deciding whether the one
-source they care about is worth cloning for.
+Deanchored from the codebase on purpose. The SVG is written to the
+`health-history` branch next to `history.jsonl` and `badge.json`, and the README
+just points an <img> at its raw URL. So the panel refreshes daily without a
+single commit to main — no bot noise in the history of the actual project, and
+nothing to review. Same trick as the shields badge above it.
 
-Deliberately edits only the light. The Source and Description prose in those
-tables is hand-written and stays hand-owned; this script adds or refreshes a
-leading status cell and touches nothing else. Generating the prose too would
-mean the README slowly becomes a worse copy of the skill descriptions.
+    uv run python scripts/health_panel.py --history health/history.jsonl -o panel.svg
 
-    uv run python scripts/health_panel.py --history health/history.jsonl
-    uv run python scripts/health_panel.py --history h.jsonl --check   # CI: no writes
+The badge is the headline (one light, 7-day bar, for a stranger deciding whether
+to trust the repo). This is the detail view: the current verdict per source, for
+someone checking the one source they actually care about.
 
-Sources with no probe render as ○ rather than a false green — see
-tests/health/README.md for why some skills have nothing upstream to probe.
+Plain shapes and text only — GitHub sanitises SVG and strips scripts, and camo
+proxies it. Colours are picked to read on both light and dark backgrounds, since
+an <img> cannot see the viewer's theme.
 """
 from __future__ import annotations
 
 import argparse
 import pathlib
-import re
 import sys
+from datetime import datetime, timezone
+from xml.sax.saxutils import escape
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 from scripts.health_verdict import judge_all, load  # noqa: E402
 
-# README display name -> probe name (the tests/health/test_<name>.py stem).
-# Kept here rather than derived: the README says "Umferð (Vegagerðin)" for
-# humans and the probe says "umferd" for machines, and both are correct.
-DISPLAY_TO_PROBE = {
-    "Hagstofa Íslands": "hagstofan",
-    "Seðlabanki": "sedlabanki",
-    "Tekjusagan": "tekjusagan",
-    "Velsældarvísar": "velsaeldarvisar",
-    "Heimsmarkmið": "heimsmarkmid",
-    "Ríkisreikningur": "rikisreikningur",
-    "Landlæknir": "landlaeknir",
-    "Vinnumálastofnun": "vinnumalastofnun",
-    "Farsæld barna": "farsaeld_barna",
-    "Mælaborð landbúnaðarins": "maelabord_landbunadarins",
-    "Ferðamálastofa": "ferdamalastofa",
-    "Umferð (Vegagerðin)": "umferd",
-    "Byggðastofnun": "byggdastofnun",
-    "Vernd (Ríkislögreglustjóri)": "vernd",
-    "Skatturinn": "skatturinn",
-    "Nasdaq Iceland": "nasdaq",
-    "Fuel": "fuel",
-    "Maskína": "maskina",
-    "Opnir reikningar": "opnirreikningar",
-    "Tenders": "tenders",
-    "HMS": "hms",
-    "Skipulagsmál (Planitor)": "skipulagsmal",
-    "Samgöngustofa": "samgongustofa",
-    "car (island.is)": "car",
-    "Veður": "vedur",
-    "Loftgæði": "loftgaedi",
-    "CO2 (co2.is)": "co2",
-    "LMI": "lmi",
-    "Laun (payday.is)": "laun",
-    "Gengi (Borgun)": "gengi",
-    "Dómstólar": "domstolar",
-    "Reykjavíkurborg": "reykjavik",
+# Probe name -> display name. Probes are machine names (`umferd`); humans read
+# "Umferð". Anything not listed renders under its probe name.
+DISPLAY = {
+    "hagstofan": "Hagstofa Íslands",
+    "sedlabanki": "Seðlabanki",
+    "tekjusagan": "Tekjusagan",
+    "velsaeldarvisar": "Velsældarvísar",
+    "heimsmarkmid": "Heimsmarkmið",
+    "rikisreikningur": "Ríkisreikningur",
+    "landlaeknir": "Landlæknir",
+    "vinnumalastofnun": "Vinnumálastofnun",
+    "farsaeld_barna": "Farsæld barna",
+    "maelabord_landbunadarins": "Mælaborð landb.",
+    "ferdamalastofa": "Ferðamálastofa",
+    "umferd": "Umferð",
+    "byggdastofnun": "Byggðastofnun",
+    "vernd": "Vernd",
+    "skatturinn": "Skatturinn",
+    "nasdaq": "Nasdaq Iceland",
+    "fuel": "Fuel",
+    "maskina": "Maskína",
+    "opnirreikningar": "Opnir reikningar",
+    "tenders": "Tenders",
+    "hms": "HMS",
+    "skipulagsmal": "Skipulagsmál",
+    "samgongustofa": "Samgöngustofa",
+    "car": "car (island.is)",
+    "vedur": "Veður",
+    "loftgaedi": "Loftgæði",
+    "co2": "CO2",
+    "lmi": "LMI",
+    "lmi_hrl": "LMI HRL",
+    "natt": "Náttúrufr.stofnun",
+    "eea_sdi": "EEA SDI",
+    "laun": "Laun",
+    "gengi": "Gengi",
+    "domstolar": "Dómstólar",
+    "reykjavik": "Reykjavíkurborg",
+    "fjarlog": "Fjárlög",
 }
 
-# Rows with no upstream of their own. Rendered ○, never green — a green light
-# on something that cannot break is a lie that looks like coverage.
-NO_UPSTREAM = {
-    "Financials": "analysis over skatturinn PDFs",
-    "Insurance": "analysis over skatturinn PDFs",
-    "iceaddr": "local library, bundled SQLite",
-    "Kortagerð": "renders from cached LMI data",
+# Mid-tone fills, legible on white and on #0d1117 alike.
+COLOR = {
+    "healthy": "#2da44e",
+    "flaky": "#d29922",
+    "dead": "#cf222e",
+    "broken": "#cf222e",
+    "unknown": "#8b949e",
 }
 
-LIGHT = {
-    "healthy": "🟢",
-    "flaky": "🟡",
-    "dead": "🔴",
-    "broken": "🔴",
-    "unknown": "⚪",
-}
-NONE_LIGHT = "○"
-
-START = "<!-- health:start -->"
-END = "<!-- health:end -->"
-
-_ROW = re.compile(r"^\|(?P<cells>.+)\|\s*$")
+COLS = 3
+ROW_H = 22
+PAD = 14
+HEADER_H = 34
+COL_W = 210
+DOT_R = 5
 
 
-def lights(history: pathlib.Path, window_days: int = 30) -> dict[str, str]:
-    """probe name -> light emoji."""
+def _row(x: float, y: float, label: str, color: str, title: str) -> str:
+    return (
+        f'<g><title>{escape(title)}</title>'
+        f'<circle cx="{x + DOT_R}" cy="{y - 4}" r="{DOT_R}" fill="{color}"/>'
+        f'<text x="{x + DOT_R * 2 + 8}" y="{y}" class="l">{escape(label)}</text>'
+        f"</g>"
+    )
+
+
+def render(history: pathlib.Path, window_days: int = 30) -> str:
     verdicts = judge_all(load(history, window_days))
-    return {v.source: LIGHT.get(v.verdict, "⚪") for v in verdicts}
+    # Worst first — if something is broken, it should be the first thing seen.
+    counts = {k: sum(1 for v in verdicts if v.verdict == k) for k in COLOR}
 
+    rows = max(1, -(-len(verdicts) // COLS))  # ceil
+    w = PAD * 2 + COL_W * COLS
+    h = PAD * 2 + HEADER_H + rows * ROW_H
 
-def _light_for(display: str, by_probe: dict[str, str]) -> str:
-    if display in NO_UPSTREAM:
-        return NONE_LIGHT
-    probe = DISPLAY_TO_PROBE.get(display)
-    if probe is None:
-        return "⚪"
-    return by_probe.get(probe, "⚪")
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    summary = "  ".join(
+        f"{counts[k]} {k}" for k in ("dead", "broken", "flaky", "healthy", "unknown") if counts[k]
+    )
 
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+        f'viewBox="0 0 {w} {h}" role="img" aria-label="Source health: {escape(summary)}">',
+        "<style>"
+        ".l{font:12px -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;fill:#57606a}"
+        ".h{font:600 13px -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;fill:#24292f}"
+        ".s{font:11px -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;fill:#8b949e}"
+        "@media (prefers-color-scheme:dark){.l{fill:#8b949e}.h{fill:#e6edf3}}"
+        "</style>",
+        f'<text x="{PAD}" y="{PAD + 12}" class="h">Source health</text>',
+        f'<text x="{w - PAD}" y="{PAD + 12}" class="s" text-anchor="end">{escape(stamp)}</text>',
+        f'<text x="{PAD}" y="{PAD + 27}" class="s">{escape(summary)}</text>',
+    ]
 
-def render(readme: str, by_probe: dict[str, str]) -> str:
-    """Add/refresh the leading status cell in every source table row."""
-    out, in_panel = [], False
-    for line in readme.splitlines():
-        if line.strip() == START:
-            in_panel = True
-            out.append(line)
-            continue
-        if line.strip() == END:
-            in_panel = False
-            out.append(line)
-            continue
-        if not in_panel:
-            out.append(line)
-            continue
+    for i, v in enumerate(verdicts):
+        col, row = i % COLS, i // COLS
+        x = PAD + col * COL_W
+        y = PAD + HEADER_H + row * ROW_H + 12
+        label = DISPLAY.get(v.source, v.source)
+        note = f"{v.verdict}"
+        if v.uptime is not None:
+            note += f" · {v.uptime:.0%} of {v.observations} obs"
+        if v.last_error:
+            note += f" · {v.last_error[:80]}"
+        out.append(_row(x, y, label, COLOR.get(v.verdict, "#8b949e"), f"{label}: {note}"))
 
-        m = _ROW.match(line)
-        if not m:
-            out.append(line)
-            continue
-
-        cells = [c.strip() for c in m.group("cells").split("|")]
-
-        # Header + separator: widen once, idempotently.
-        if cells[:2] == ["Source", "Description"]:
-            out.append("| | Source | Description |")
-            continue
-        if cells[:1] == ["", "Source", "Description"][:1] and cells[1:3] == ["Source", "Description"]:
-            out.append("| | Source | Description |")
-            continue
-        if all(set(c) <= {"-", ":"} and c for c in cells):
-            out.append("|" + "|".join(["---"] * max(len(cells), 3)) + "|")
-            continue
-
-        # Data row: drop any existing light cell, then re-add.
-        if cells and (cells[0] in LIGHT.values() or cells[0] == NONE_LIGHT or cells[0] == ""):
-            cells = cells[1:]
-        if len(cells) < 2:
-            out.append(line)
-            continue
-        display, desc = cells[0], cells[1]
-        out.append(f"| {_light_for(display, by_probe)} | {display} | {desc} |")
-
-    return "\n".join(out) + ("\n" if readme.endswith("\n") else "")
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--history", type=pathlib.Path, required=True)
-    ap.add_argument("--readme", type=pathlib.Path, default=pathlib.Path("README.md"))
+    ap.add_argument("-o", "--out", type=pathlib.Path, default=pathlib.Path("panel.svg"))
     ap.add_argument("--window-days", type=int, default=30)
-    ap.add_argument("--check", action="store_true", help="exit 1 if the panel is stale; write nothing")
     args = ap.parse_args(argv)
 
-    src = args.readme.read_text(encoding="utf-8")
-    if START not in src or END not in src:
-        print(f"{args.readme} has no {START} / {END} markers", file=sys.stderr)
-        return 2
-
-    out = render(src, lights(args.history, args.window_days))
-    if out == src:
-        print("panel up to date")
-        return 0
-    if args.check:
-        print("panel is stale", file=sys.stderr)
-        return 1
-    args.readme.write_text(out, encoding="utf-8")
-    print(f"panel refreshed -> {args.readme}")
+    args.out.write_text(render(args.history, args.window_days), encoding="utf-8")
+    print(f"panel -> {args.out}", file=sys.stderr)
     return 0
 
 

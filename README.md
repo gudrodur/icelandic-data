@@ -34,93 +34,94 @@ Currently 45 skills covering national statistics, government dashboards
 `description` is its index entry — run `ls .agents/skills/` to enumerate them, and see
 [`AGENTS.md`](AGENTS.md) for the quick-commands reference.
 
-Lights are refreshed daily from [`health-history`](https://github.com/jokull/icelandic-data/tree/health-history)
-and reflect the **current** verdict — a finer signal than the badge above, which
-waits a full week before going red.
+<a href="https://github.com/jokull/icelandic-data/actions/workflows/source-health.yml">
+  <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/panel.svg" alt="Source health: current verdict per data source" width="660">
+</a>
 
-🟢 healthy &nbsp;·&nbsp; 🟡 flaky (failed but recovered — these APIs blink) &nbsp;·&nbsp;
-🔴 dead, or the skill no longer matches the source &nbsp;·&nbsp; ⚪ not enough observations yet &nbsp;·&nbsp;
-○ nothing upstream to probe ([why](tests/health/README.md#skills-with-no-upstream-to-probe))
+Refreshed daily. 🟢 healthy · 🟡 flaky (failed but recovered — these APIs blink) ·
+🔴 dead, or the skill no longer matches the source · ⚪ not enough observations yet.
+Finer-grained than the badge above, which waits a full week before going red. Hover a
+dot for uptime and the last error. Some skills have
+[nothing upstream to probe](tests/health/README.md#skills-with-no-upstream-to-probe)
+and are absent.
 
-<!-- health:start -->
 ### Statistics & macroeconomic
 
-| | Source | Description |
-|---|---|---|
-| 🟢 | Hagstofa Íslands | PX-Web API — economic, demographic, trade, income series |
-| 🟡 | Seðlabanki | SDMX API — monetary policy, financial stability, FX history via ECB |
-| ⚪ | Tekjusagan | Income-history dashboard — 5 Power BI report routes (Forsætisráðuneytið) |
-| ⚪ | Velsældarvísar | Hagstofa indicator catalogs — well-being + social + cultural (88 indicators → 77 PX tables) |
-| ⚪ | Heimsmarkmið | UN SDG national statistics — 137 indicators across all 17 goals (open-sdg ZIP bundle) |
-| 🟢 | Ríkisreikningur | State accounts — yearly afkoma 2015+, málefnasvið breakdowns, 35 published files (Azure Functions API) |
+| Source | Description |
+|--------|-------------|
+| Hagstofa Íslands | PX-Web API — economic, demographic, trade, income series |
+| Seðlabanki | SDMX API — monetary policy, financial stability, FX history via ECB |
+| Tekjusagan | Income-history dashboard — 5 Power BI report routes (Forsætisráðuneytið) |
+| Velsældarvísar | Hagstofa indicator catalogs — well-being + social + cultural (88 indicators → 77 PX tables) |
+| Heimsmarkmið | UN SDG national statistics — 137 indicators across all 17 goals (open-sdg ZIP bundle) |
+| Ríkisreikningur | State accounts — yearly afkoma 2015+, málefnasvið breakdowns, 35 published files (Azure Functions API) |
 
 ### Government dashboards (_mælaborð_)
 
 Systematic coverage of public dashboards published under Iceland's data-access law.
 
-| | Source | Description |
-|---|---|---|
-| ⚪ | Landlæknir | 33 Directorate-of-Health Power BI dashboards + Talnabrunnur PDFs |
-| ⚪ | Vinnumálastofnun | Registered unemployment — Power BI + monthly Excel |
-| ⚪ | Farsæld barna | Child-wellbeing dashboard (static-data Power BI) |
-| ⚪ | Mælaborð landbúnaðarins | 3 Power BI dashboards — subsidies, livestock, markets |
-| ⚪ | Ferðamálastofa | Keflavík passengers, flights, accommodation — Power BI scraping |
-| 🟢 | Umferð (Vegagerðin) | 168+ traffic counters — real-time 15-min + 7-day rolling daily |
-| ⚪ | Byggðastofnun | Regional-development dashboards — 11 Tableau Public embeds (population, income, energy, grants) |
-| ⚪ | Vernd (Ríkislögreglustjóri) | Asylum / international-protection monthly stats — Power BI |
+| Source | Description |
+|--------|-------------|
+| Landlæknir | 33 Directorate-of-Health Power BI dashboards + Talnabrunnur PDFs |
+| Vinnumálastofnun | Registered unemployment — Power BI + monthly Excel |
+| Farsæld barna | Child-wellbeing dashboard (static-data Power BI) |
+| Mælaborð landbúnaðarins | 3 Power BI dashboards — subsidies, livestock, markets |
+| Ferðamálastofa | Keflavík passengers, flights, accommodation — Power BI scraping |
+| Umferð (Vegagerðin) | 168+ traffic counters — real-time 15-min + 7-day rolling daily |
+| Byggðastofnun | Regional-development dashboards — 11 Tableau Public embeds (population, income, energy, grants) |
+| Vernd (Ríkislögreglustjóri) | Asylum / international-protection monthly stats — Power BI |
 
 ### Business & markets
 
-| | Source | Description |
-|---|---|---|
-| ⚪ | Skatturinn | Annual reports (ársreikningar), company registry, ownership chains |
-| ○ | Financials | PDF-to-structured extraction via `pdfplumber` + Claude interpretation |
-| ⚪ | Nasdaq Iceland | Exchange notices, annual reports, insider trading |
-| ○ | Insurance | 4 insurers (Sjóvá, Skagi/VÍS, TM, Vörður), combined ratios, Nordic comparison |
-| ⚪ | Fuel | Gasvaktin prices + conglomerate financials for N1/Olís/Orkan/Atlantsolía |
-| ⚪ | Maskína | Public-opinion polls via Tableau Public VizQL + WordPress API |
-| ⚪ | Opnir reikningar | Government invoices by org/vendor/type, 2017–present |
-| ⚪ | Tenders | 3,494+ public tenders via TED API + OCDS bulk data |
+| Source | Description |
+|--------|-------------|
+| Skatturinn | Annual reports (ársreikningar), company registry, ownership chains |
+| Financials | PDF-to-structured extraction via `pdfplumber` + Claude interpretation |
+| Nasdaq Iceland | Exchange notices, annual reports, insider trading |
+| Insurance | 4 insurers (Sjóvá, Skagi/VÍS, TM, Vörður), combined ratios, Nordic comparison |
+| Fuel | Gasvaktin prices + conglomerate financials for N1/Olís/Orkan/Atlantsolía |
+| Maskína | Public-opinion polls via Tableau Public VizQL + WordPress API |
+| Opnir reikningar | Government invoices by org/vendor/type, 2017–present |
+| Tenders | 3,494+ public tenders via TED API + OCDS bulk data |
 
 ### Property, planning, addresses
 
-| | Source | Description |
-|---|---|---|
-| ⚪ | HMS | Kaupskrá fasteigna (222k transactions, geocoded) + Landeignaskrá (89k parcel polygons) |
-| ⚪ | Skipulagsmál (Planitor) | Planning & building permits — cases, minutes, entities, nearby search across 5 municipalities |
-| ○ | iceaddr | Icelandic address geocoding (bundled SQLite from Staðfangaskrá) |
+| Source | Description |
+|--------|-------------|
+| HMS | Kaupskrá fasteigna (222k transactions, geocoded) + Landeignaskrá (89k parcel polygons) |
+| Skipulagsmál (Planitor) | Planning & building permits — cases, minutes, entities, nearby search across 5 municipalities |
+| iceaddr | Icelandic address geocoding (bundled SQLite from Staðfangaskrá) |
 
 ### Transport & mobility
 
-| | Source | Description |
-|---|---|---|
-| ⚪ | Samgöngustofa | Vehicle registrations by make, fuel type, location — Power BI |
-| ⚪ | car (island.is) | Per-vehicle lookup by plate/VIN via public GraphQL API |
+| Source | Description |
+|--------|-------------|
+| Samgöngustofa | Vehicle registrations by make, fuel type, location — Power BI |
+| car (island.is) | Per-vehicle lookup by plate/VIN via public GraphQL API |
 
 ### Environment & geography
 
-| | Source | Description |
-|---|---|---|
-| 🟢 | Veður | Met-Office XML API — observations, forecasts, climatology |
-| 🟢 | Loftgæði | UST air quality — PM10/PM2.5/NO2/H2S, 57 stations, hourly |
-| 🟢 | CO2 (co2.is) | Climate action plan — 106 numbered actions across 4 kerfi, status + ministry + year tracking |
-| ⚪ | LMI | Vector geodata via GeoServer WFS — coastline, roads, rivers, glaciers |
-| ○ | Kortagerð | Iceland map generation — matplotlib (static) + Leaflet (interactive) |
+| Source | Description |
+|--------|-------------|
+| Veður | Met-Office XML API — observations, forecasts, climatology |
+| Loftgæði | UST air quality — PM10/PM2.5/NO2/H2S, 57 stations, hourly |
+| CO2 (co2.is) | Climate action plan — 106 numbered actions across 4 kerfi, status + ministry + year tracking |
+| LMI | Vector geodata via GeoServer WFS — coastline, roads, rivers, glaciers |
+| Kortagerð | Iceland map generation — matplotlib (static) + Leaflet (interactive) |
 
 ### Personal finance & rates
 
-| | Source | Description |
-|---|---|---|
-| ⚪ | Laun (payday.is) | Take-home salary calculator with tax/pension breakdown |
-| ⚪ | Gengi (Borgun) | Currency exchange rates (card rates, not interbank) |
+| Source | Description |
+|--------|-------------|
+| Laun (payday.is) | Take-home salary calculator with tax/pension breakdown |
+| Gengi (Borgun) | Currency exchange rates (card rates, not interbank) |
 
 ### Legal & civic
 
-| | Source | Description |
-|---|---|---|
-| ⚪ | Dómstólar | Court rulings — Héraðsdómstólar, Landsréttur, Hæstiréttur via RSS + scraping |
-| ⚪ | Reykjavíkurborg | CKAN + PX-Web APIs for municipal services, demographics, welfare, Opin Fjármál |
-<!-- health:end -->
+| Source | Description |
+|--------|-------------|
+| Dómstólar | Court rulings — Héraðsdómstólar, Landsréttur, Hæstiréttur via RSS + scraping |
+| Reykjavíkurborg | CKAN + PX-Web APIs for municipal services, demographics, welfare, Opin Fjármál |
 
 ## Setup
 

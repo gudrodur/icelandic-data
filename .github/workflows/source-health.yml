@@ -107,6 +107,16 @@ jobs:
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             > /dev/null
 
+      # README badge. Written before the commit step so it ships with the
+      # observation. Deliberately a 7-day bar, not the pager's 2-3 runs: this
+      # one is read by strangers, and a badge that flaps is worse than none.
+      - name: Refresh badge
+        run: |
+          uv run python scripts/health_verdict.py \
+            --history .history/history.jsonl \
+            --badge .history/badge.json \
+            > /dev/null || true
+
       # Push before judging, so a gating verdict never costs us the datapoint.
       # These commits are also genuine repository activity, which plausibly
       # holds off the 60-day auto-disable of scheduled workflows — GitHub does
@@ -118,7 +128,7 @@ jobs:
           cd .history
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add history.jsonl
+          git add history.jsonl badge.json
           git commit --quiet -m "health: $(date -u +%Y-%m-%dT%H:%MZ)" || {
             echo "nothing to commit"; exit 0;
           }

@@ -47,6 +47,12 @@ BROKEN_AFTER = 2
 # Below this many observations we decline to judge rather than guess.
 MIN_OBSERVATIONS = 2
 
+# The README badge deliberately has a much higher bar than the pager. It is
+# read by strangers deciding whether to trust this repo, so it should report
+# settled facts, not weather. A source must be down this long before it turns
+# the badge red — a badge that flaps is worse than no badge.
+BADGE_DOWN_DAYS = 7
+
 _RANK: dict[Verdict, int] = {"broken": 0, "dead": 1, "flaky": 2, "unknown": 3, "healthy": 4}
 _LABEL: dict[Verdict, str] = {
     "dead": "DEAD",
@@ -69,10 +75,26 @@ class SourceVerdict:
     last_error: str
     error_class: str
     kind: str
+    down_days: float | None = None
 
     @property
     def gating(self) -> bool:
         return self.verdict in _GATING
+
+
+def down_for_days(v: SourceVerdict, threshold: float = BADGE_DOWN_DAYS) -> bool:
+    """Has this source been failing continuously for `threshold` days?
+
+    Measured as wall-clock since the last success, NOT as a count of failed
+    observations. A run that never happened is not evidence of a source being
+    down, so counting observations would let a week of dropped CI runs
+    masquerade as a week of outage. Time since last_ok cannot be faked that way.
+
+    A source that has never once succeeded has no last_ok; it is excluded rather
+    than treated as infinitely down, because that is far more likely to be a
+    broken probe than a source that never existed.
+    """
+    return bool(v.gating and v.down_days is not None and v.down_days >= threshold)
 
 
 def load(path: pathlib.Path, window_days: int) -> dict[str, list[dict]]:
@@ -129,6 +151,13 @@ def judge(source: str, rows: list[dict]) -> SourceVerdict:
     error_class = newest.get("error_class", "") if newest["status"] != "healthy" else ""
     kind = newest.get("kind", "") if newest["status"] != "healthy" else ""
 
+    down_days = None
+    if last_ok and newest["status"] != "healthy":
+        then = datetime.fromisoformat(last_ok)
+        if then.tzinfo is None:
+            then = then.replace(tzinfo=timezone.utc)
+        down_days = round((datetime.now(timezone.utc) - then).total_seconds() / 86400, 2)
+
     if structural_streak >= BROKEN_AFTER:
         verdict: Verdict = "broken"
     elif streak >= DEAD_AFTER:
@@ -151,7 +180,39 @@ def judge(source: str, rows: list[dict]) -> SourceVerdict:
         last_error=last_error[:200],
         error_class=error_class,
         kind=kind,
+        down_days=down_days,
     )
+
+
+def badge(verdicts: list[SourceVerdict], threshold: float = BADGE_DOWN_DAYS) -> dict:
+    """shields.io endpoint payload — https://shields.io/badges/endpoint-badge
+
+    Rendered in the README via:
+        img.shields.io/endpoint?url=<raw url of this file on health-history>
+
+    No hosting, no service: shields fetches the JSON we already commit.
+    """
+    judged = [v for v in verdicts if v.verdict != "unknown"]
+    down = [v for v in judged if down_for_days(v, threshold)]
+
+    if not judged:
+        message, color = "no data", "lightgrey"
+    elif down:
+        worst = max(down, key=lambda v: v.down_days or 0)
+        if len(down) == 1:
+            message = f"{worst.source} down {worst.down_days:.0f}d"
+        else:
+            message = f"{len(down)} sources down"
+        color = "red"
+    else:
+        message, color = f"{len(judged)}/{len(judged)} healthy", "brightgreen"
+
+    return {
+        "schemaVersion": 1,
+        "label": "data sources",
+        "message": message,
+        "color": color,
+    }
 
 
 def judge_all(by_source: dict[str, list[dict]]) -> list[SourceVerdict]:
@@ -206,12 +267,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--window-days", type=int, default=30, help="lookback window (default 30)")
     ap.add_argument("--json", type=pathlib.Path, help="write verdicts here")
     ap.add_argument("--markdown", type=pathlib.Path, help="append a markdown summary here")
+    ap.add_argument(
+        "--badge",
+        type=pathlib.Path,
+        help="write a shields.io endpoint JSON here (README badge)",
+    )
+    ap.add_argument(
+        "--badge-down-days",
+        type=float,
+        default=BADGE_DOWN_DAYS,
+        help=f"days a source must be down before the badge goes red (default {BADGE_DOWN_DAYS})",
+    )
     args = ap.parse_args(argv)
 
     by_source = load(args.history, args.window_days)
     if not by_source:
         # No history is not a failure — it is the first run, or a fresh window.
         print(f"no observations in {args.history} within {args.window_days}d", file=sys.stderr)
+        if args.badge:
+            # Still write the badge, or a stale one lingers in the README
+            # claiming health we can no longer vouch for.
+            args.badge.write_text(json.dumps(badge([]), indent=2) + "\n", encoding="utf-8")
         return 0
 
     verdicts = judge_all(by_source)
@@ -233,6 +309,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.markdown:
         with args.markdown.open("a", encoding="utf-8") as fh:
             fh.write(render_markdown(verdicts, args.window_days))
+    if args.badge:
+        payload = badge(verdicts, args.badge_down_days)
+        args.badge.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(f"badge: {payload['message']} ({payload['color']})", file=sys.stderr)
 
     gating = [v for v in verdicts if v.gating]
     if gating:

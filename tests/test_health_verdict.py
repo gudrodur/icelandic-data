@@ -230,8 +230,113 @@ def test_json_output_shape(tmp_path, monkeypatch):
     assert v["streak"] == 3
     assert set(v) == {
         "source", "verdict", "streak", "observations", "uptime",
-        "last_ok", "last_error", "error_class", "kind",
+        "last_ok", "last_error", "error_class", "kind", "down_days",
     }
+
+
+# --------------------------------------------------------------------------
+# README badge — a public signal, so a much higher bar than the pager
+# --------------------------------------------------------------------------
+
+
+def test_badge_green_when_all_healthy():
+    v = [hv.judge("vedur", [_row(days_ago=i) for i in range(5)])]
+    b = hv.badge(v)
+    assert b["color"] == "brightgreen"
+    assert b["message"] == "1/1 healthy"
+    assert b["schemaVersion"] == 1
+
+
+def test_badge_stays_green_for_a_source_down_less_than_a_week(monkeypatch):
+    """3 days dead pages you, but must NOT redden the public badge."""
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    rows = [_row(days_ago=4), _infra(2), _infra(1), _infra(0)]
+    v = hv.judge("sedlabanki", rows)
+    assert v.verdict == "dead"          # pager fires
+    assert not hv.down_for_days(v)      # badge does not
+    assert hv.badge([v])["color"] == "brightgreen"
+
+
+def test_badge_red_after_a_week_down(monkeypatch):
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    rows = [_row(days_ago=9)] + [_infra(d) for d in range(8, -1, -1)]
+    v = hv.judge("sedlabanki", rows)
+    b = hv.badge([v])
+    assert b["color"] == "red"
+    assert "sedlabanki" in b["message"] and "down" in b["message"]
+
+
+def test_badge_red_for_a_broken_skill_too(monkeypatch):
+    """Not just dead sources — a skill lying for a week is public-worthy."""
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    rows = [_row(days_ago=10)] + [_structural(d) for d in range(9, -1, -1)]
+    v = hv.judge("hagstofan", rows)
+    assert v.verdict == "broken"
+    assert hv.badge([v])["color"] == "red"
+
+
+def test_badge_counts_multiple_down_sources(monkeypatch):
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    a = hv.judge("sedlabanki", [_row(days_ago=9)] + [_infra(d) for d in range(8, -1, -1)])
+    b = hv.judge("hagstofan", [_row(days_ago=9)] + [_structural(d) for d in range(8, -1, -1)])
+    out = hv.badge([a, b])
+    assert out["message"] == "2 sources down"
+    assert out["color"] == "red"
+
+
+def test_a_week_of_dropped_ci_runs_cannot_fake_a_red_badge(monkeypatch):
+    """The failure mode that would make this badge a liar.
+
+    Down-ness is wall-clock since last success, never a count of failed
+    observations. If CI simply stopped running, there are no rows at all — and
+    absence of evidence must not render as evidence of an outage.
+    """
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    # Healthy 10 days ago, then silence — no observations since.
+    v = hv.judge("vedur", [_row(days_ago=10)])
+    assert v.verdict != "dead"
+    assert not hv.down_for_days(v)
+    assert hv.badge([v])["color"] != "red"
+
+
+def test_source_that_never_succeeded_does_not_redden_the_badge(monkeypatch):
+    """No last_ok means a probably-broken probe, not an infinitely-dead source."""
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    v = hv.judge("newthing", [_infra(d) for d in range(9, -1, -1)])
+    assert v.verdict == "dead"      # still pages you
+    assert v.down_days is None
+    assert not hv.down_for_days(v)  # but stays out of the public badge
+
+
+def test_badge_ignores_unknown_sources():
+    v = [hv.judge("brand-new", [_row(days_ago=0)])]
+    assert v[0].verdict == "unknown"
+    assert hv.badge(v)["message"] == "no data"
+
+
+def test_badge_written_by_cli(tmp_path, monkeypatch):
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    p = _history(tmp_path, [_row(days_ago=i) for i in range(4)])
+    out = tmp_path / "badge.json"
+    hv.main(["--history", str(p), "--badge", str(out)])
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["schemaVersion"] == 1
+    assert payload["label"] == "data sources"
+    assert payload["color"] == "brightgreen"
+
+
+def test_badge_written_even_with_no_history(tmp_path):
+    """Otherwise a stale badge keeps claiming health nobody can vouch for."""
+    out = tmp_path / "badge.json"
+    assert hv.main(["--history", str(tmp_path / "absent.jsonl"), "--badge", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["message"] == "no data"
+
+
+def test_badge_threshold_is_tunable(monkeypatch):
+    monkeypatch.setattr(hv, "datetime", _FrozenDatetime)
+    v = hv.judge("sedlabanki", [_row(days_ago=4), _infra(2), _infra(1), _infra(0)])
+    assert hv.badge([v], threshold=7)["color"] == "brightgreen"
+    assert hv.badge([v], threshold=1)["color"] == "red"
 
 
 def test_markdown_is_appended_with_gating_sources_first(tmp_path, monkeypatch):

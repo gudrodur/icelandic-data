@@ -343,6 +343,59 @@ label on the search page is accurate).
   a plausible way to widen coverage further; not done here, single-query
   is what's verified.
 
+## Chart Party-Name Canonicalization
+
+**Chart-extracted party names must go through the same `_PARTY_RE` mapping
+as prose — they didn't, for a while, and it silently broke cross-article
+comparisons.** The chart path (RÚV `aria-label`, Vísir's equivalent) used to
+take the label text as-is. Verified across real fetched data: the same
+party appeared as `"Samfylking"` in one article and `"Samfylkingin"` in
+another, `"Sósíalistaflokkur"` vs. `"Sósíalistaflokkur Íslands"`, and
+`"Vinstri græn"` vs. the full legal name `"Vinstrihreyfingin – grænt
+framboð"` (which didn't match `_PARTY_RE` *at all* before this fix — the
+"Vinstri" + "græn" adjacency requirement fails against "Vinstrihreyfingin –
+grænt framboð," where a long different word sits in between). Any
+cross-article query grouping by party — the trend/polling-average feature
+repeatedly named as the highest-value gap in earlier eval rounds — would
+have silently split one party into several rows keyed on whatever label
+string that specific chart happened to use.
+
+`_canonicalize_chart_party(raw_label)` fixes this: matched against
+`_PARTY_RE` the same way prose is, with two additions:
+- **`"Önnur framboð"`** ("other lists," a genuine non-party catch-all some
+  charts include) is explicitly dropped, not treated as an unknown party.
+- **A label matching no known party and no known catch-all is kept as-is**
+  (its data isn't discarded) but logged as
+  `[unrecognized chart party label, kept as-is] '<label>'` in the same
+  skip-notes list prose extraction already uses — so an uncatalogued party
+  surfaces instead of silently vanishing or silently misattributing.
+
+Two real gaps surfaced and fixed as a direct result of building this:
+`_PARTY_STEMS` was missing **Lýðræðisflokkur** entirely (Arnar Þór
+Jónsson's party — verified appearing independently in both a Prósent-poll
+RÚV chart, 0.2%, and Heimildin prose, 1.4%, from a different poll — not a
+one-off), and the **Vinstri græn** regex was extended to also match its own
+full legal name (see above).
+
+## `--all` Batch Reliability
+
+**A single article's fetch failure must not lose the whole batch's data.**
+Verified via a real crash: a genuinely slow/unresponsive RÚV page (Playwright
+`Page.goto` `TimeoutError`, reproduced twice on the same article) 9 articles
+into a real `fetch --all --limit 10` run raised an uncaught exception that
+propagated out of `cmd_fetch` entirely — the 9 already-succeeded articles'
+data was never written to `skodanakannanir.csv` at all (it's assembled and
+written once, at the very end of the loop). Each article's raw `{id}.json`
+*does* survive independently (written immediately inside the loop, per
+article, before moving to the next) — so nothing was unrecoverable, but the
+processed CSV output looked like the whole run had produced nothing.
+
+Fixed with a `try`/`except` around each article's fetch call: a failure is
+printed, recorded, and the loop continues; the CSV is written from whatever
+succeeded, with a `N article(s) failed and were skipped` summary. Re-ran the
+identical failing batch afterward — it now completes, 46 rows written, 1
+article cleanly reported as failed instead of the whole run vanishing.
+
 ## Extraction Status by Source
 
 | Source | Discovery (`list`) | Numbers (`fetch`) |

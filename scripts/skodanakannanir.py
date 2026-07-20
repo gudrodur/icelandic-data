@@ -386,6 +386,67 @@ def fetch_visir_article_list(max_pages: int = 40, stop_before_year: int | None =
     return sorted(seen.values(), key=lambda r: r["published_at"] or "", reverse=True)
 
 
+def _hours_apart(a: str | None, b: str | None) -> float:
+    from datetime import datetime
+
+    if not a or not b:
+        return float("inf")
+    # RÚV timestamps carry a "Z" (UTC) suffix, Vísir's (from _visir_date_to_iso)
+    # don't. Iceland has no DST and sits at UTC+0 year-round, so both are the
+    # same wall-clock zone numerically — strip tzinfo after parsing rather
+    # than reconcile offsets, so a naive/aware mismatch can't raise.
+    fmt = lambda s: datetime.fromisoformat(s.replace("Z", "+00:00")).replace(tzinfo=None)
+    return abs((fmt(a) - fmt(b)).total_seconds()) / 3600
+
+
+def cross_reference_duplicates(articles: list[dict], window_hours: float = 48) -> list[str]:
+    """Flag RÚV/Vísir articles that almost certainly cover the same poll.
+
+    Deliberately conservative — the same discipline as the prose parser:
+    when a match is ambiguous, leave both records alone rather than guess.
+    Matches require *all three* of: same non-null pollster (exact string —
+    "Maskína" only matches "Maskína", not a null-pollster article that might
+    coincidentally be about the same poll), same scope, and published within
+    `window_hours` of each other. A RÚV article with more than one Vísir
+    candidate in that window is left unmerged and logged, not merged onto
+    whichever happens to be closest in time — ambiguity here means a real
+    editorial judgment call (which Vísir story is actually the RÚV twin?),
+    not a `min()` away.
+
+    Mutates matched Vísir records in place, adding `duplicate_of` (the RÚV
+    article's id) and adds `also_reported_by` (a list of {source, id, url})
+    on the matched RÚV article. Returns log lines for cases considered but
+    not merged.
+    """
+    ruv_articles = [a for a in articles if a["source"] == "ruv" and a["pollster"]]
+    visir_articles = [a for a in articles if a["source"] == "visir" and a["pollster"]]
+    skipped = []
+
+    for ruv in ruv_articles:
+        candidates = [
+            v
+            for v in visir_articles
+            if v["pollster"] == ruv["pollster"]
+            and v["scope"] == ruv["scope"]
+            and _hours_apart(ruv["published_at"], v["published_at"]) <= window_hours
+            and "duplicate_of" not in v  # a Vísir article matches at most one RÚV article
+        ]
+        if len(candidates) == 1:
+            visir = candidates[0]
+            visir["duplicate_of"] = ruv["id"]
+            ruv.setdefault("also_reported_by", []).append(
+                {"source": "visir", "id": visir["id"], "url": visir["url"]}
+            )
+        elif len(candidates) > 1:
+            skipped.append(
+                f"[ambiguous, {len(candidates)} Vísir candidates] {ruv['id']} {ruv['title']!r} "
+                f"({ruv['pollster']}, {ruv['published_at']}) matches: "
+                + ", ".join(f"{c['id']} ({c['published_at']})" for c in candidates)
+            )
+
+    return skipped
+
+
 def cmd_list(args):
     articles = []
     if args.source in ("ruv", "all"):
@@ -393,15 +454,31 @@ def cmd_list(args):
     if args.source in ("visir", "all"):
         articles += fetch_visir_article_list(stop_before_year=args.since)
 
+    dedupe_skipped = []
+    if args.source == "all":
+        dedupe_skipped = cross_reference_duplicates(articles)
+
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     out_file = RAW_DIR / "articles.json"
     out_file.write_text(json.dumps(articles, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    shown = [a for a in articles if not args.scope or a["scope"] == args.scope]
-    print(f"{len(shown)} poll articles ({out_file} holds all {len(articles)})")
+    shown = [
+        a for a in articles
+        if (not args.scope or a["scope"] == args.scope) and "duplicate_of" not in a
+    ]
+    n_cross_reported = sum(1 for a in articles if "duplicate_of" in a)
+    summary = f"{len(shown)} distinct poll articles"
+    if n_cross_reported:
+        summary += f" ({n_cross_reported} Vísir articles merged as cross-reports of a RÚV poll)"
+    if dedupe_skipped:
+        summary += f", {len(dedupe_skipped)} ambiguous cross-reference(s) left unmerged (see below)"
+    print(f"{summary} ({out_file} holds all {len(articles)})")
     for a in shown[: args.limit]:
         pollster = a["pollster"] or "?"
-        print(f"  [{a['id']}] {(a['published_at'] or '?????????')[:10]} ({a['source']}, {a['scope']}, {pollster}) {a['title']}")
+        also = f" [+{len(a['also_reported_by'])} more]" if a.get("also_reported_by") else ""
+        print(f"  [{a['id']}] {(a['published_at'] or '?????????')[:10]} ({a['source']}, {a['scope']}, {pollster}) {a['title']}{also}")
+    for line in dedupe_skipped:
+        print(f"  {line}")
 
 
 async def _scrape_article(url: str) -> dict:

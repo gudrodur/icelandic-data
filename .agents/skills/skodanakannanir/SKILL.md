@@ -1,14 +1,23 @@
 ---
 name: skodanakannanir
-description: RÚV opinion-poll aggregator (skoðanakannanir) — national Alþingi and Reykjavík city party support across pollsters (Maskína, Prósent, Gallup).
+description: RÚV + Vísir opinion-poll aggregators (skoðanakannanir) — national Alþingi and Reykjavík city party support across pollsters (Maskína, Prósent, Gallup).
 ---
 
-# Skoðanakannanir — RÚV Opinion-Poll Aggregator
+# Skoðanakannanir — RÚV + Vísir Opinion-Poll Aggregators
 
-RÚV's `skodanakonnun` tag page aggregates news coverage of opinion polls from
+Two outlets' tag pages, each aggregating news coverage of opinion polls from
 every major Icelandic pollster — not just one firm's own dashboard. Use this
 skill for "what's the latest party support / fylgi flokka" questions, at
 either national (Alþingi) or Reykjavík city (borgarstjórn) level.
+
+**Use Vísir for discovery, RÚV for numbers.** Verified: RÚV's tag page holds
+only ~51 recent items with no working pagination (see Caveat 7), while
+Vísir's is genuinely paginated back to at least September 2021. `list
+--source visir --since 2025 --scope reykjavik` alone found 40 Reykjavík polls
+against RÚV's 4 — including the entire Feb–May 2026 city-election polling
+season RÚV's own tag had already dropped. But only RÚV articles are wired
+into `fetch`'s chart/prose number-extraction so far (see Vísir Discovery
+below) — Vísir is list/discovery-only for now.
 
 **Related but different scope:** the [`maskina`](../maskina/SKILL.md) skill
 covers Maskína's own structured Tableau dashboard directly — one pollster,
@@ -162,32 +171,85 @@ airport siting (`Reykjavíkurflugvöllur`) will be tagged `reykjavik` even
 though it isn't a party-support question. That's expected: the skill scopes
 by *where*, not *what*.
 
+## Vísir Discovery
+
+`https://www.visir.is/t/2296/skodanakannanir/{page}` — server-rendered HTML
+(no JSON blob), `<article class="article-item">` cards, genuinely paginated:
+verified by fetching pages 1/5/10/20/40 and finding distinct,
+chronologically-descending content from July 2026 (page 1) back through
+September 2021 (page 20), with page 40 empty (end of history reached).
+`fetch_visir_article_list()` walks pages until an empty page, or — with
+`--since <year>` — until a whole page's articles are all older than the
+cutoff (pages are date-descending, so that's a safe stopping point without
+walking all ~35+ pages every time).
+
+```html
+<article class="article-item ...">
+  <h2 class="article-item__title"><a href="/g/20262904348d/fylgi-...">Fylgi Sjálfstæðis­flokks ekki meira í sex ár</a></h2>
+  <p class="article-item__text">Sjálfstæðisflokkurinn mælist með 24,9 prósenta fylgi í nýjum þjóðarpúlsi Gallups. ...</p>
+  <time class="article-item__time">1.7.2026 19:45</time>
+</article>
+```
+
+- **The listing subtitle (`article-item__text`) often states the headline
+  number directly** — unlike RÚV's subtitles, which are usually pure prose
+  summary. For a quick "what's the latest" answer, `list`'s output alone may
+  already be enough; no need to visit the article page.
+- Titles/subtitles carry HTML entities (`&#xF6;` = ö) and literal soft
+  hyphens (`\xad`, rendered as `­`) mid-word from the source markup — both
+  must be stripped/unescaped (`html.unescape` + `.replace("\xad", "")`) or
+  matching against `_PARTY_RE`/`_POLLSTER_RE` silently fails on words that
+  are visually identical but byte-different.
+- Dates are Icelandic `D.M.YYYY HH:MM` (`"1.7.2026 19:45"`), converted to
+  ISO 8601 by `_visir_date_to_iso()`.
+- IDs are the numeric prefix of the `/g/<id>d/<slug>` URL path, stored as
+  `visir-<id>` (RÚV ids are stored as `ruv-<id>` for the same reason —
+  disambiguating which source's numbering a bare id belongs to once both
+  are combined in one cache file).
+- **Recurring feature to know about:** "Kosningaspá Vísis" (Vísir's own
+  election-forecast/projection series) — not a raw poll report, an
+  aggregated model. Shows up correctly under this skill's scope/pollster
+  guessing as `pollster: null` (no known-pollster name in the text) since
+  it isn't a single firm's poll.
+- The same underlying poll is frequently reported by **both** RÚV and Vísir
+  (and sometimes with a distinct Vísir angle, e.g. "Kosningaspá Vísis: ...").
+  There is currently **no cross-source dedup/merge** — `list --source all`
+  returns both as separate rows. Reconciling them (same pollster + adjacent
+  dates + matching headline number → likely the same poll) is a known gap,
+  not yet built.
+
 ## Script Usage
 
 ```bash
-uv run python scripts/skodanakannanir.py list                      # all articles -> data/raw/skodanakannanir/articles.json
-uv run python scripts/skodanakannanir.py list --scope reykjavik    # filter the printed view (cache always holds all)
-uv run python scripts/skodanakannanir.py fetch 479261              # one article's chart -> data/processed/skodanakannanir.csv
-uv run python scripts/skodanakannanir.py fetch --all --limit 20    # batch (slow: one browser launch per article)
+uv run python scripts/skodanakannanir.py list                                  # RÚV only (default) -> data/raw/skodanakannanir/articles.json
+uv run python scripts/skodanakannanir.py list --source visir --since 2025      # Vísir only, paginated back to a year cutoff
+uv run python scripts/skodanakannanir.py list --source all --since 2025 --scope reykjavik --limit 30
+uv run python scripts/skodanakannanir.py fetch 479261                          # bare int = RÚV, backward-compatible
+uv run python scripts/skodanakannanir.py fetch ruv-479261                      # equivalent, explicit
+uv run python scripts/skodanakannanir.py fetch visir-20262904348               # errors clearly: not implemented yet, prints the URL to read by hand
+uv run python scripts/skodanakannanir.py fetch --all --limit 20                # batch over cached RÚV articles only
 ```
 
 ## Data Files
 
 | Path | Format | Description |
 |------|--------|-------------|
-| `data/raw/skodanakannanir/articles.json` | JSON | Full article listing from the tag page (id, title, subtitle, url, published_at, scope, pollster) |
-| `data/raw/skodanakannanir/{id}.json` | JSON | Raw scrape result for one article (page title + party/pct pairs) |
-| `data/processed/skodanakannanir.csv` | CSV | Long-format party support: article_id, published_at, scope, pollster, title, party, pct |
+| `data/raw/skodanakannanir/articles.json` | JSON | Article listing from whichever `--source` was last run (id prefixed `ruv-`/`visir-`, title, subtitle, url, published_at, scope, pollster, source) |
+| `data/raw/skodanakannanir/{id}.json` | JSON | Raw scrape result for one RÚV article (page title + party/pct pairs) |
+| `data/processed/skodanakannanir.csv` | CSV | Long-format party support, RÚV only so far: article_id, published_at, scope, pollster, title, party, pct |
 
 ## Caveats
 
 1. **Not every poll article has a chart** — see Prose Fallback above.
    `fetch` tries the chart first, falls back to prose, and reports which
    source it used (`chart`/`prose`/`none`).
-2. **`list`'s cache file always holds the full unfiltered set.** `--scope`
-   only filters what's printed to the terminal, not what's written to
-   `articles.json` — so `fetch` can resolve any article id regardless of
-   which `--scope` you last listed with.
+2. **`list`'s cache file always holds the full unfiltered set for whatever
+   `--source` was requested** — `--scope` only filters what's printed to the
+   terminal, not what's written to `articles.json`. But `--source` *does*
+   determine what's in the cache: `list` (RÚV only) followed by `fetch
+   visir-...` fails with "unknown article id" until you re-run `list
+   --source all` (or `--source visir`) to populate the cache with Vísir rows
+   too — verified, this is the actual failure mode, not a hypothetical.
 3. **Percentages don't always sum to exactly 100** — verified example
    (article 479261) summed to 99.9 due to per-party rounding in the source
    chart. Treat as expected, not a parsing bug.
@@ -225,9 +287,19 @@ uv run python scripts/skodanakannanir.py fetch --all --limit 20    # batch (slow
    weeks, silently dropping older-but-still-recent articles regardless of
    which tag you use. `list` surfaces only what's inside that live window —
    there is no way to page back further via any `frettir/tag/*` endpoint
-   found so far. For a specific gap, `WebSearch` with `site:ruv.is` (the
-   same fallback the [`ruv`](../ruv/SKILL.md) skill documents for `/sok`)
-   reliably finds articles the tag pages have already dropped.
+   found so far. **Use `--source visir` (or `all`) instead of chasing this
+   with `WebSearch`** — Vísir's tag page has none of these gaps (see Vísir
+   Discovery above) and is the better default for anything historical.
+   `WebSearch site:ruv.is` (the same fallback the [`ruv`](../ruv/SKILL.md)
+   skill documents for `/sok`) remains a fine one-off check, just not the
+   first move anymore.
+
+8. **VB (Viðskiptablaðið) was checked and has no equivalent tag page** —
+   spot-checked one poll article there (`vb.is/frettir/stal-i-stal-i-borginni-/`)
+   with no `skodanakonnun`/`skoðanakönnun` tag found in the page. It does
+   serve a `sitemap.xml` (200 OK), which could be a discovery path if VB
+   coverage turns out to matter for a specific gap, but that's unexplored —
+   not built, not verified beyond confirming the sitemap responds.
 
 ## Related Skills
 

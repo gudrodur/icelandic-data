@@ -31,6 +31,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 TAG_URL = "https://www.ruv.is/frettir/tag/skodanakonnun"
+VISIR_TAG_URL = "https://www.visir.is/t/2296/skodanakannanir/{page}"
 
 RAW_DIR = Path(__file__).parent.parent / "data" / "raw" / "skodanakannanir"
 PROCESSED_DIR = Path(__file__).parent.parent / "data" / "processed"
@@ -294,7 +295,8 @@ def fetch_article_list() -> list[dict]:
     seen = {}
     for a in articles:
         seen[a["id"]] = {
-            "id": a["id"],
+            "id": f"ruv-{a['id']}",
+            "source": "ruv",
             "title": a["title"],
             "subtitle": a.get("subtitle"),
             "url": _article_url(a["url"]),
@@ -305,8 +307,91 @@ def fetch_article_list() -> list[dict]:
     return sorted(seen.values(), key=lambda r: r["published_at"] or "", reverse=True)
 
 
+# --- Vísir ----------------------------------------------------------------
+# Unlike RÚV, Vísir's tag page is genuinely paginated — verified by fetching
+# pages 1/5/10/20/40 of /t/2296/skodanakannanir/<page> and finding distinct,
+# chronologically descending content all the way back to September 2021
+# (page 20), with page 40 empty (end of history). No __NEXT_DATA__ blob
+# here — this is server-rendered HTML with <article class="article-item">
+# cards, so it's regex-parsed, not JSON-walked. The listing's own subtitle
+# frequently states the headline poll number directly (e.g. "Sjálfstæðis-
+# flokkurinn mælist með 24,9 prósenta fylgi..."), which is often enough for
+# a "what's the latest" answer without visiting the article page at all.
+_VISIR_ARTICLE_RE = re.compile(r'<article class="article-item[^"]*">(.*?)</article>', re.S)
+_VISIR_LINK_RE = re.compile(r'href="(/g/[^"]+)"')
+_VISIR_TITLE_RE = re.compile(r'<h2 class="article-item__title"><a[^>]*>([^<]+)</a></h2>')
+_VISIR_TEXT_RE = re.compile(r'<p class="article-item__text">\s*([^<]+)')
+_VISIR_TIME_RE = re.compile(r'<time[^>]*>([^<]+)</time>')
+_VISIR_DATE_RE = re.compile(r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})")
+
+
+def _visir_id(url_path: str) -> str:
+    # /g/20262876815d/andar-koldu-... -> visir-20262876815
+    m = re.search(r"/g/(\d+)d?/", url_path)
+    return f"visir-{m.group(1)}" if m else f"visir-{url_path}"
+
+
+def _visir_date_to_iso(date_raw: str) -> str | None:
+    m = _VISIR_DATE_RE.match(date_raw)
+    if not m:
+        return None
+    day, month, year, hour, minute = (int(g) for g in m.groups())
+    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00"
+
+
+def fetch_visir_article_list(max_pages: int = 40, stop_before_year: int | None = None) -> list[dict]:
+    from html import unescape
+
+    seen = {}
+    for page in range(1, max_pages + 1):
+        resp = httpx.get(VISIR_TAG_URL.format(page=page), headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
+        resp.raise_for_status()
+        blocks = _VISIR_ARTICLE_RE.findall(resp.text)
+        if not blocks:
+            break  # end of pagination (verified: page 40 returns 0 <article> blocks)
+
+        page_had_recent_enough = False
+        for block in blocks:
+            link_m = _VISIR_LINK_RE.search(block)
+            title_m = _VISIR_TITLE_RE.search(block)
+            time_m = _VISIR_TIME_RE.search(block)
+            if not (link_m and title_m and time_m):
+                continue  # non-article card (ad slot, gallery, etc.) — skip, don't guess
+            text_m = _VISIR_TEXT_RE.search(block)
+
+            published_at = _visir_date_to_iso(time_m.group(1).strip())
+            if stop_before_year and published_at and int(published_at[:4]) < stop_before_year:
+                continue
+            if published_at and (not stop_before_year or int(published_at[:4]) >= stop_before_year):
+                page_had_recent_enough = True
+
+            title = unescape(title_m.group(1)).replace("\xad", "").strip()
+            subtitle = unescape(text_m.group(1)).replace("\xad", "").strip() if text_m else None
+            url = "https://www.visir.is" + link_m.group(1)
+            article_id = _visir_id(link_m.group(1))
+            seen[article_id] = {
+                "id": article_id,
+                "source": "visir",
+                "title": title,
+                "subtitle": subtitle,
+                "url": url,
+                "published_at": published_at,
+                "scope": _guess_scope(title, subtitle),
+                "pollster": _guess_pollster(title, subtitle),
+            }
+
+        if stop_before_year and not page_had_recent_enough:
+            break  # every item on this page is older than the cutoff — pages are date-descending, so done
+
+    return sorted(seen.values(), key=lambda r: r["published_at"] or "", reverse=True)
+
+
 def cmd_list(args):
-    articles = fetch_article_list()
+    articles = []
+    if args.source in ("ruv", "all"):
+        articles += fetch_article_list()
+    if args.source in ("visir", "all"):
+        articles += fetch_visir_article_list(stop_before_year=args.since)
 
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     out_file = RAW_DIR / "articles.json"
@@ -316,7 +401,7 @@ def cmd_list(args):
     print(f"{len(shown)} poll articles ({out_file} holds all {len(articles)})")
     for a in shown[: args.limit]:
         pollster = a["pollster"] or "?"
-        print(f"  [{a['id']}] {a['published_at'][:10]} ({a['scope']}, {pollster}) {a['title']}")
+        print(f"  [{a['id']}] {(a['published_at'] or '?????????')[:10]} ({a['source']}, {a['scope']}, {pollster}) {a['title']}")
 
 
 async def _scrape_article(url: str) -> dict:
@@ -374,12 +459,24 @@ def cmd_fetch(args):
     by_id = {a["id"]: a for a in articles}
 
     if args.all:
-        targets = articles[: args.limit]
+        targets = [a for a in articles if a["source"] == "ruv"][: args.limit]
     elif args.article_id:
-        if args.article_id not in by_id:
-            print(f"Unknown article id {args.article_id} — run `list` first", file=sys.stderr)
+        # Accept a bare RÚV numeric id ("479261") for backwards compatibility
+        # with every command documented before Vísir support existed, as
+        # well as the explicit prefixed form ("ruv-479261" / "visir-...").
+        article_id = args.article_id if "-" in args.article_id else f"ruv-{args.article_id}"
+        if article_id not in by_id:
+            print(f"Unknown article id {article_id} — run `list` first", file=sys.stderr)
             sys.exit(1)
-        targets = [by_id[args.article_id]]
+        if article_id.startswith("visir-"):
+            print(
+                "Vísir article number-extraction isn't implemented yet — "
+                "list/discovery only for now. Read the article directly:\n"
+                f"  {by_id[article_id]['url']}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        targets = [by_id[article_id]]
     else:
         print("Provide an article id or --all", file=sys.stderr)
         sys.exit(1)
@@ -432,13 +529,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_list = sub.add_parser("list", help="List poll articles from the RÚV tag page")
+    p_list = sub.add_parser("list", help="List poll articles from RÚV and/or Vísir")
     p_list.add_argument("--scope", choices=["national", "reykjavik"], default=None)
+    p_list.add_argument("--source", choices=["ruv", "visir", "all"], default="ruv")
+    p_list.add_argument(
+        "--since", type=int, default=None,
+        help="Earliest year to keep (Vísir only — paginates back through 2021; RÚV's tag window is already short)",
+    )
     p_list.add_argument("--limit", type=int, default=20)
     p_list.set_defaults(func=cmd_list)
 
     p_fetch = sub.add_parser("fetch", help="Scrape party-support numbers from one or more articles")
-    p_fetch.add_argument("article_id", type=int, nargs="?", default=None)
+    p_fetch.add_argument("article_id", type=str, nargs="?", default=None)
     p_fetch.add_argument("--all", action="store_true", help="Fetch every listed article")
     p_fetch.add_argument("--limit", type=int, default=10)
     p_fetch.set_defaults(func=cmd_fetch)

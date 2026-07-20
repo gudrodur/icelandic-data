@@ -75,11 +75,21 @@ _PARTY_STEMS = [
     ("Samfylking", r"Samfylking\w*"),
     ("Framsóknarflokkur", r"Framsókn(?:arflokk\w*)?"),
     ("Viðreisn", r"Viðreisn\w*"),
-    ("Vinstri græn", r"Vinstri\s*g?ræn\w*|\bVG\b"),
+    # Chart aria-labels (verified: RÚV's Highcharts embeds) sometimes carry
+    # the full legal name "Vinstrihreyfingin – grænt framboð" rather than
+    # the short form — the dash-separated "hreyfingin ... grænt framboð"
+    # span doesn't satisfy the original "Vinstri" + optional-whitespace +
+    # "græn" adjacency requirement, so it silently failed to canonicalize
+    # (see the Chart Label Canonicalization note further down).
+    ("Vinstri græn", r"Vinstri\s*g?ræn\w*|\bVG\b|Vinstrihreyfingin\s*[-–]\s*grænt\s+framboð"),
     ("Píratar", r"Píra\w*"),
     ("Miðflokkur", r"Miðflokk\w*"),
     ("Flokkur fólksins", r"Flokk\w*\s+fólksins"),
     ("Sósíalistaflokkur", r"Sósíalist\w*"),
+    # Arnar Þór Jónsson's party — verified appearing twice independently in
+    # real fetched data: a Prósent-poll RÚV chart (0.2%) and Heimildin's
+    # prose text of an older Prósent poll (1.4%). Not a one-off.
+    ("Lýðræðisflokkur", r"Lýðræðisflokk\w*"),
     # A distinct 2026 Reykjavík electoral alliance (Vinstri græn + Vor til
     # vinstri, formally named 2026-02-23), NOT a nickname for Vinstri græn —
     # confirmed against Wikipedia before adding this (see
@@ -348,6 +358,38 @@ def _guess_pollster(title: str, subtitle: str) -> str | None:
     return None
 
 
+# Chart aria-labels — verified across both RÚV and Vísir Highcharts embeds —
+# carry the party name as the chart tool's own label text, completely
+# independent of _PARTY_RE: e.g. "Samfylkingin" (not "Samfylking"),
+# "Vinstrihreyfingin - grænt framboð" (full legal name) and even
+# "Sósíalistaflokkur Íslands" alongside plain "Sósíalistaflokkur" on
+# different charts. The prose path always canonicalizes through
+# _PARTY_CANONICAL; the chart path did not, at all, until this was added —
+# found by inspecting raw fetched JSON across 6 chart-sourced articles and
+# noticing party names varied by article for what was obviously the same
+# party. Any cross-article aggregation (a trend command, a polling average —
+# both already-identified gaps) would have silently split one party into
+# several rows keyed on whichever label string that specific chart happened
+# to use. "Önnur framboð" ("other lists") is a genuine non-party catch-all
+# bucket some charts include — explicitly dropped, not passed through as an
+# unknown party. A label that matches no known party AND isn't a recognized
+# catch-all is kept as-is (better to surface an uncatalogued party than
+# silently drop its data) but flagged, so it doesn't stay invisible forever.
+_CHART_NON_PARTY_LABELS = {"önnur framboð", "aðrir", "aðrir listar", "annað"}
+
+
+def _canonicalize_chart_party(raw_label: str) -> tuple[str | None, bool]:
+    """Returns (party_name_or_None, was_recognized). party_name is None
+    for confirmed non-party catch-all labels ("Önnur framboð")."""
+    if raw_label.strip().lower() in _CHART_NON_PARTY_LABELS:
+        return None, True
+    m = _PARTY_RE.search(raw_label)
+    if m:
+        idx = next(i for i, g in m.groupdict().items() if g)
+        return _PARTY_CANONICAL[int(idx[1:])], True
+    return raw_label, False
+
+
 def fetch_article_list() -> list[dict]:
     resp = httpx.get(TAG_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
     resp.raise_for_status()
@@ -483,12 +525,18 @@ def fetch_visir_article(url: str) -> dict:
 
     parties = []
     source = "chart"
+    skipped: list[str] = []
     for label in _VISIR_CHART_RE.findall(html):
         m = re.match(r"^(.+?),\s*([\d.,]+)\s*%\.?$", label.strip())
-        if m:
-            parties.append({"party": m.group(1).strip(), "pct": float(m.group(2).replace(",", "."))})
+        if not m:
+            continue
+        party, recognized = _canonicalize_chart_party(m.group(1).strip())
+        if party is None:
+            continue  # confirmed non-party catch-all label ("Önnur framboð")
+        if not recognized:
+            skipped.append(f"[unrecognized chart party label, kept as-is] {party!r}")
+        parties.append({"party": party, "pct": float(m.group(2).replace(",", "."))})
 
-    skipped: list[str] = []
     if not parties:
         start_m = _VISIR_SUMMARY_MARKER_RE.search(html)
         if start_m:
@@ -708,14 +756,18 @@ async def _scrape_article(url: str) -> dict:
         )
         parties = []
         source = "chart"
+        skipped: list[str] = []
         for label in bars:
             m = re.match(r"^(.+?),\s*([\d.,]+)\s*%\.?$", label.strip())
-            if m:
-                parties.append(
-                    {"party": m.group(1).strip(), "pct": float(m.group(2).replace(",", "."))}
-                )
+            if not m:
+                continue
+            party, recognized = _canonicalize_chart_party(m.group(1).strip())
+            if party is None:
+                continue  # confirmed non-party catch-all label ("Önnur framboð")
+            if not recognized:
+                skipped.append(f"[unrecognized chart party label, kept as-is] {party!r}")
+            parties.append({"party": party, "pct": float(m.group(2).replace(",", "."))})
 
-        skipped: list[str] = []
         if not parties:
             # No chart on this article — fall back to prose. Scoped to
             # .article-body, not all of <main>: the page footer/sidebar
@@ -772,11 +824,30 @@ def cmd_fetch(args):
         sys.exit(1)
 
     rows = []
+    failed = []
     for meta in targets:
         print(f"  fetching [{meta['id']}] {meta['title']} ...")
         # Vísir is server-rendered (plain httpx, see fetch_visir_article);
         # RÚV needs a browser (client-side rendered, see _scrape_article).
-        result = fetch_visir_article(meta["url"]) if meta["source"] == "visir" else asyncio.run(_scrape_article(meta["url"]))
+        # One article's failure (verified: a RÚV Playwright page.goto
+        # TimeoutError, on a slow/unresponsive page 9 articles into a real
+        # --all --limit 10 run) must not lose every already-fetched article
+        # in this batch — before this try/except, an uncaught exception here
+        # propagated straight out of cmd_fetch, skipping the CSV write
+        # entirely; the individual {id}.json raw files for already-processed
+        # articles survived (each is written inside this loop), but the
+        # aggregated CSV did not exist at all afterward. Continue past a
+        # single failure and still write whatever succeeded.
+        try:
+            result = (
+                fetch_visir_article(meta["url"])
+                if meta["source"] == "visir"
+                else asyncio.run(_scrape_article(meta["url"]))
+            )
+        except Exception as exc:
+            print(f"    FAILED: {type(exc).__name__}: {exc}")
+            failed.append({"id": meta["id"], "url": meta["url"], "error": f"{type(exc).__name__}: {exc}"})
+            continue
         if not result["parties"]:
             print(f"    no chart and no prose figures extracted ({len(result['prose_skipped'])} sentences skipped)")
             continue
@@ -799,6 +870,9 @@ def cmd_fetch(args):
         (RAW_DIR / f"{meta['id']}.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+
+    if failed:
+        print(f"  {len(failed)} article(s) failed and were skipped: {[f['id'] for f in failed]}")
 
     if not rows:
         print("No poll data extracted.")

@@ -142,6 +142,50 @@ _APPROX_RE = re.compile(r"\b(rúm(?:t|lega)?|tæp(?:t|lega)?|um)\s+$")
 # single party, so the current_party fallback must not apply.
 _AGGREGATE_RE = re.compile(r"\b(samanlagt|flokkanna)\b", re.IGNORECASE)
 
+# RÚV's "skoðanakönnun" tag also catches leader-trust / job-approval / policy-
+# opinion polls that are NOT party-fylgi polls at all, but phrase themselves
+# with the exact same poll-cue verbs ("mælist", "stendur") and often
+# reference a party only via its chairperson's title ("formaður
+# Framsóknarflokksins") or a voter-subgroup breakdown ("meðal Pírata",
+# "þeirra sem kusu Viðreisn") — both of which set/inherit current_party just
+# like a genuine party-support sentence would. Verified as three independent
+# real false positives, each a different RÚV article that is entirely about
+# something other than party support: ruv-458088 ("traust" — trust in
+# individual ministers: "Þeim sem bera lítið traust til hennar fjölgar ...
+# úr 15 í 24 prósent" inherited a stale current_party from an earlier
+# "Ráðherrar Flokks fólksins eru þeir sem flestir vantreysta" sentence);
+# ruv-453144 ("ánægja" — satisfaction with the taxi market, broken down by
+# which party each respondent voted for: "Minnst mælist hún í röðum
+# fylgismanna Vinstri grænna, 61 prósent" and "Mest mælist ánægjan ... meðal
+# Pírata" produced two bogus rows); ruv-458497 ("staðið sig vel/illa" — job-
+# approval ratings for party leaders, where "Sigurður Ingi stendur sig litlu
+# betur, 58 prósent segja hann hafa staðið sig illa" inherited current_party
+# from a "formaður Framsóknarflokksins" mention two sentences earlier). None
+# of these sentences are about a party's own support level, so a sentence
+# whose actual topic is satisfaction/trust/approval must not be treated as a
+# poll figure at all, regardless of which cue verb it happens to contain —
+# same discipline as _AGGREGATE_RE, just for a different false-attribution
+# shape. A second, related false-attribution shape — a genuine poll-cue verb
+# ("mælist") firing on a voter-subgroup breakdown rather than the party's
+# own figure — needs its own signal: "Minnst mælist hún í röðum fylgismanna
+# Vinstri grænna, 61 prósent" (ruv-453144, same taxi-market-satisfaction
+# article) still slipped through the topic words above because the pronoun
+# "hún" refers back to "ánægjan" without restating it in this sentence —
+# only "fylgismanna" (supporters of) marks it. "fylgismenn/kjósendur/kusu/
+# kaus X" is never how a party's own support figure is phrased (that's
+# always "flokkurinn/fylgi flokksins mælist X", the party as direct
+# grammatical subject) — it's specifically the construction for "how does
+# the subgroup who voted/supports X feel about topic Y", so it gets the
+# same treatment. Checked against every verified real party-support
+# sentence in the current regression set (451831, 428434, 467932, 468092,
+# visir-20262884571, visir-20262904348) — none of them use any of this
+# vocabulary.
+_NON_SUPPORT_TOPIC_RE = re.compile(
+    r"\b(ánægj\w*|óánægj\w*|traust\w*|vantreyst\w*|staðið\s+sig"
+    r"|fylgismann\w*|kjósend\w*|kusu|kaus)\b",
+    re.IGNORECASE,
+)
+
 _ONES = {
     "núll": 0, "eitt": 1, "einn": 1, "tvö": 2, "tveir": 2, "þrjú": 3, "þrír": 3,
     "fjögur": 4, "fjórir": 4, "fimm": 5, "sex": 6, "sjö": 7, "átta": 8, "níu": 9,
@@ -238,6 +282,10 @@ def extract_prose_poll_figures(paragraphs: list[str]) -> tuple[list[dict], list[
             if not percent_matches:
                 continue
 
+            if _NON_SUPPORT_TOPIC_RE.search(sentence):
+                skipped.append(f"[non-support topic (trust/satisfaction/approval), not party fylgi] {sentence}")
+                continue
+
             poll_cue_matches = list(_POLL_CUE_RE.finditer(sentence))
             historical_cue_matches = list(_HISTORICAL_CUE_RE.finditer(sentence))
             trend_cue_matches = list(_TREND_CUE_RE.finditer(sentence))
@@ -311,11 +359,36 @@ def extract_prose_poll_figures(paragraphs: list[str]) -> tuple[list[dict], list[
                     party = _PARTY_CANONICAL[int(idx[1:])]
                 elif _AGGREGATE_RE.search(sentence):
                     party = None  # aggregate figure ("samanlagt fylgi flokkanna") — no single party owns it
+                elif not poll_cue_matches:
+                    # Trend-cue-only sentence (no recognized poll verb) with
+                    # no party named in-sentence — pronoun/current_party
+                    # carryover is too risky here without a verb anchoring
+                    # the sentence to a poll figure at all. Verified false
+                    # positive (ruv-458088, a leaders'-trust poll, not a
+                    # party-support one): "Þeim sem bera lítið traust til
+                    # hennar fjölgar allnokkuð, úr 15 prósentum í 24
+                    # prósent" inherited a stale current_party ("Flokkur
+                    # fólksins") set two sentences earlier by "Ráðherrar
+                    # Flokks fólksins eru þeir sem flestir vantreysta" —
+                    # about that party's ministers, not its poll number —
+                    # producing a bogus "Flokkur fólksins: 24%" row for an
+                    # individual minister's trust rating. Both real verified
+                    # trend-cue examples (article 428434: "Fylgi
+                    # Framsóknarflokksins fór úr 6,7 í 5,3 prósent",
+                    # "Stuðningur við Sósíalistaflokkinn eykst úr 2,4 í 4,3
+                    # prósent") name their party in-sentence, so this
+                    # restriction costs nothing against evidence seen so far.
+                    party = None
                 else:
                     party = current_party
 
                 if not party:
-                    reason = "aggregate, no single party" if _AGGREGATE_RE.search(sentence) else "no party in context"
+                    if _AGGREGATE_RE.search(sentence):
+                        reason = "aggregate, no single party"
+                    elif not poll_cue_matches:
+                        reason = "trend cue, no party in sentence, no poll verb — pronoun fallback too risky"
+                    else:
+                        reason = "no party in context"
                     skipped.append(f"[{reason}] {sentence}")
                     continue
 

@@ -211,12 +211,26 @@ walking all ~35+ pages every time).
   aggregated model. Shows up correctly under this skill's scope/pollster
   guessing as `pollster: null` (no known-pollster name in the text) since
   it isn't a single firm's poll.
-- The same underlying poll is frequently reported by **both** RÚV and Vísir
-  (and sometimes with a distinct Vísir angle, e.g. "Kosningaspá Vísis: ...").
-  There is currently **no cross-source dedup/merge** — `list --source all`
-  returns both as separate rows. Reconciling them (same pollster + adjacent
-  dates + matching headline number → likely the same poll) is a known gap,
-  not yet built.
+- The same underlying poll is frequently reported by **both** RÚV and Vísir.
+  `cross_reference_duplicates()` (run automatically when `--source all`)
+  flags this: a Vísir article gets `duplicate_of: "<ruv-id>"` and the
+  matched RÚV article gets `also_reported_by: [{source, id, url}, ...]`
+  when — and only when — all three hold: same non-null pollster (exact
+  string match), same scope, and published within 48 hours of each other.
+  `list`'s printed view and its distinct-article count exclude anything
+  with `duplicate_of` set; the saved `articles.json` keeps every row either
+  way, so nothing is lost, just marked. Verified match (2026-03-24): RÚV's
+  "Samfylkingin dalar enn" and Vísir's "Fylgi Samfylkingar ekki verið minna
+  í eitt ár", ~15 hours apart, both Maskína, both national — genuinely the
+  same poll release covered two ways.
+  **When there's more than one same-pollster/same-scope Vísir candidate in
+  the window, nothing is merged** — logged as `ambiguous, N Vísir
+  candidates` instead. This is common and expected, not a bug: Vísir
+  regularly runs a follow-up angle piece on the same poll a day or two after
+  the first report (verified: 4 ambiguous cases in the 2025–2026 window,
+  each with 2-3 genuinely distinct Vísir stories about one poll release).
+  Picking the "closest in time" candidate would be a guess dressed up as a
+  match — left for manual reconciliation instead.
 
 ## Script Usage
 

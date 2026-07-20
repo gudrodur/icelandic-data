@@ -197,6 +197,11 @@ uv run python scripts/byggdastofnun.py url tekjur
 uv run python scripts/tekjusagan.py token
 uv run python scripts/tekjusagan.py fetch
 
+# Skoðanakannanir — RÚV opinion-poll tag-page aggregator (national + Reykjavík, all pollsters)
+uv run python scripts/skodanakannanir.py list
+uv run python scripts/skodanakannanir.py list --scope reykjavik
+uv run python scripts/skodanakannanir.py fetch 479261
+
 # Ferðamálastofa — Keflavík tourism Power BI
 uv run python scripts/ferdamalastofa.py --help
 

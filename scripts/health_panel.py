@@ -52,12 +52,12 @@ COLOR = {
 # directory: this script also runs against a history file alone.
 PROBES = [
     "byggdastofnun", "car", "co2", "domstolar", "eea_sdi", "farsaeld_barna",
-    "ferdamalastofa", "fjarlog", "fuel", "gengi", "hagstofan", "heimsmarkmid",
+    "energy", "ferdamalastofa", "fiskistofa", "fjarlog", "fuel", "gengi", "hafogvatn", "hagstofan", "heimsmarkmid",
     "hms", "landlaeknir", "laun", "lmi", "lmi_hrl", "loftgaedi",
     "maelabord_landbunadarins", "maskina", "nasdaq", "natt", "opnirreikningar",
     "reykjavik", "rikisreikningur", "samgongustofa", "sedlabanki", "skatturinn",
     "skipulagsmal", "tekjusagan", "tenders", "umferd", "vedur",
-    "velsaeldarvisar", "vernd", "vinnumalastofnun",
+    "ust_gis", "velsaeldarvisar", "vernd", "vinnumalastofnun",
 ]
 
 SIZE = 12

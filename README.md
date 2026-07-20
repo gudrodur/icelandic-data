@@ -29,7 +29,7 @@ Code, and `CLAUDE.md` symlinks to `AGENTS.md`. One set of files, both agents.
 
 ## Data sources
 
-Currently 45 skills covering national statistics, government dashboards
+Currently 49 skills covering national statistics, government dashboards
 (_mælaborð_), regulatory filings, and utility APIs. Each skill's frontmatter
 `description` is its index entry — run `ls .agents/skills/` to enumerate them, and see
 [`AGENTS.md`](AGENTS.md) for the quick-commands reference.
@@ -55,6 +55,7 @@ Per-source uptime and last error are in the
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/heimsmarkmid.svg" width="12"> | Heimsmarkmið | UN SDG national statistics — 137 indicators across all 17 goals (open-sdg ZIP bundle) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/rikisreikningur.svg" width="12"> | Ríkisreikningur | State accounts — yearly afkoma 2015+, málefnasvið breakdowns, 35 published files (Azure Functions API) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/fjarlog.svg" width="12"> | Fjárlög | State budget appropriations + 5-year plan at málaflokkur level (actual / enacted / bill) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/energy.svg" width="12"> | Energy | Electricity generation by source, energy-system tables and fuel sales (Environment & Energy Agency) |
 
 ### Government dashboards (_mælaborð_)
 
@@ -110,7 +111,15 @@ Systematic coverage of public dashboards published under Iceland's data-access l
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/lmi_hrl.svg" width="12"> | LMI HRL | Copernicus High Resolution Layers via LMI — grassland, imperviousness (20 m raster) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/natt.svg" width="12"> | Náttúrufræðistofnun | Habitat-type polygons (vistgerðir) via WFS |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/eea_sdi.svg" width="12"> | EEA SDI | European Environment Agency geospatial catalogue (GeoNetwork 4.4) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/ust_gis.svg" width="12"> | UST GIS | Environment Agency WFS — contaminated land, water, protected areas, noise and wastewater |
 | · | Kortagerð | Iceland map generation — matplotlib (static) + Leaflet (interactive) |
+
+### Energy & fisheries
+
+| | Source | Description |
+|---|--------|-------------|
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/hafogvatn.svg" width="12"> | Hafrannsóknastofnun | Annual fish-stock assessments, advice, landings and survey series (embedded table JSON) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/fiskistofa.svg" width="12"> | Fiskistofa | Open WFS layers for active fishing closures, regulations and fishing areas (not paid catch/quota REST) |
 
 ### Personal finance & rates
 

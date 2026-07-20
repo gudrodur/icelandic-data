@@ -67,14 +67,31 @@ TELEGRAM_TARGET="461214887"
 
 mkdir -p "$LOG_DIR" "$STATE_DIR"
 
-# Overlap guard, same idiom as mediaserver-healthcheck.sh
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  exit 0
-fi
-trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
-
 timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 log() { printf '%s %s\n' "$(timestamp)" "$*" >>"$LOG_FILE"; }
+
+# Overlap guard.  A directory is atomic on macOS, but a bare directory lock is
+# unsafe for a dead-man's switch: SIGKILL can strand it forever.  Record the
+# owner PID and reclaim the lock only when that process no longer exists.
+LOCK_PID="$LOCK_DIR/pid"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  owner_pid="$(cat "$LOCK_PID" 2>/dev/null || true)"
+  if [[ "$owner_pid" =~ ^[0-9]+$ ]] && kill -0 "$owner_pid" 2>/dev/null; then
+    exit 0
+  fi
+  log "WARN: reclaiming stale dead-man's-switch lock (owner=${owner_pid:-unknown})"
+  rm -f "$LOCK_PID"
+  if ! rmdir "$LOCK_DIR" 2>/dev/null || ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    log "ERROR: could not reclaim lock at $LOCK_DIR"
+    exit 0
+  fi
+fi
+if ! printf '%s\n' "$$" >"$LOCK_PID"; then
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+  log "ERROR: could not write lock owner"
+  exit 0
+fi
+trap 'rm -f "$LOCK_PID"; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 notify() {
   local text="$1"

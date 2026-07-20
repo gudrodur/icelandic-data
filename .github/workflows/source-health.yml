@@ -155,6 +155,7 @@ jobs:
       # not define "activity", so this is a side benefit, not the safety net.
       # The safety net is a dead-man's-switch (see below).
       - name: Commit history
+        id: history
         run: |
           set -euo pipefail
           cd .history
@@ -172,7 +173,8 @@ jobs:
             echo "push rejected (attempt $attempt) — rebasing on remote"
             git pull --rebase --quiet origin health-history || true
           done
-          echo "::warning::could not push health history after 3 attempts"
+          echo "::error::could not push health history after 3 attempts"
+          exit 1
 
       # The gate. Judges over the window, not over today:
       #   dead   = 3+ consecutive failures
@@ -202,10 +204,10 @@ jobs:
       # legitimately dead source silence the switch — conflating "a source is
       # down" (already reported, with detail) with "the monitor stopped" (nobody
       # is watching at all). It fires whenever we actually observed and recorded,
-      # whatever the verdict; and it does not fire when we never got that far,
-      # which is exactly when you want the silence to be noticed.
+      # whatever the verdict; and it does not fire unless the observation was
+      # durably pushed, which is exactly when you want the silence to be noticed.
       - name: Ping dead-man's-switch
-        if: always() && steps.record.outcome == 'success' && env.HEALTH_PING_URL != ''
+        if: always() && steps.record.outcome == 'success' && steps.history.outcome == 'success' && env.HEALTH_PING_URL != ''
         run: curl -fsS --retry 3 --max-time 10 "$HEALTH_PING_URL" > /dev/null
 
       - name: Upload results

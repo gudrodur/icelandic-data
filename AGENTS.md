@@ -114,6 +114,22 @@ uv run python scripts/nasdaq.py search --company "Arion banki hf." --category "�
 # Process Gasvaktin fuel prices
 uv run python scripts/fuel.py
 
+# Energy Authority — electricity generation by source (1969–2024)
+uv run python scripts/energy.py list
+uv run python scripts/energy.py fetch
+
+# Hafrannsóknastofnun / MFRI — current cod stock assessment
+uv run python scripts/hafogvatn.py list
+uv run python scripts/hafogvatn.py fetch --stock cod --year 2026
+
+# Fiskistofa — public current fishing closures (open WFS; not paid catch/quota REST)
+uv run python scripts/fiskistofa.py list
+uv run python scripts/fiskistofa.py fetch
+
+# Environment Agency GIS — contaminated land registry (open WFS)
+uv run python scripts/ust_gis.py list
+uv run python scripts/ust_gis.py fetch
+
 # EEA geospatial catalogue (sdi.eea.europa.eu, GeoNetwork 4.4)
 uv run python scripts/eea_sdi.py search "grassland" --iceland --size 10
 uv run python scripts/eea_sdi.py record   35a036bb-c027-401c-8625-2ecf722e8461

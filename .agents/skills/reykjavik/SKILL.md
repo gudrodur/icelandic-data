@@ -140,8 +140,8 @@ curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_show?id=arsuppgjor-
 
 **Fund structure changed over time (`fyrirtaeki` column):**
 - 2014–2016: Three funds — `Reykjavíkurborg`, `Eignasjóður Reykjavíkurborgar`, `Bílastæðasjóður` (codes `RK`, `ES`, `BS`).
-- 2017 onwards: Two funds — `Reykjavíkurborg` and `Eignasjóður fasteignastofa`. Bílastæðasjóður was absorbed and now appears only as a division label (`samtala3='Bílastæðasjóður'` or `samtala0` starting with `Bílastæðasjóður …`). Filter on those fields to reconstruct post-2017 BS figures.
-- Schema change 2018: column names switched from UPPERCASE (`AR`, `FYRIRTAEKI`, `XFYRIRTAEKI`, `XTGR3`, `XEINING1`, `RAUN`, …) to lowercase `samtala*`/`tegund*`/`raun`. Queries spanning pre/post-2018 must handle both schemas.
+- 2017 onwards: Two funds (`ES`, `RK`) — `Eignasjóður fasteignastofa` and `Reykjavíkurborg`. Bílastæðasjóður was absorbed and now appears only as a division label (`samtala3='Bílastæðasjóður'`, `samtala0` starting with `Bílastæðasjóður …`, or equivalently `fyrirtaeki='Bílastæðasjóður'` on the ~24-row, near-zero-net 2018 transition remainder). Filter on those fields to reconstruct post-2017 BS figures.
+- Two separate schema changes, verified against the raw files: **2017** the header casing switched from UPPERCASE (`AR`, `FYRIRTAEKI`, `XFYRIRTAEKI`, `XTGR3`, `XEINING1`, `RAUN`, …) to lowercase, keeping the same column names (`fyrirtaeki`, `tgr1..3`, `eining1..5`, `þjon1..3`, `raun`); **2018** the columns themselves were restructured to `samtala1..4`/`samtala0`, `tegund1..4`/`tegund0`, `raun`. Queries spanning 2016→2017→2018 must handle all three shapes.
 
 **Download URLs (latest years):**
 ```bash
@@ -230,9 +230,10 @@ ORDER BY raun DESC
 
 **Example — Bílastæðasjóður P&L 2018–2024 from `arsuppgjor`:**
 ```python
-# For each year's CSV, filter rows where any samtala*/tegund* field contains 'Bílastæð'
+# For each year's CSV, filter rows where samtala3 = 'Bílastæðasjóður'
 # Sum raun where raun < 0 → revenue; raun > 0 → expense; diff → surplus
-# 2024 result: 3.113 M revenue − 1.265 M expense = 1.848 M surplus
+# 2024 result (verified against data/raw/reykjavik_accounts/uppg202412.csv):
+#   2,174.8 M revenue − 990.4 M expense = 1,184.4 M surplus
 ```
 
 ### Population & Demographics

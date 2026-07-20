@@ -139,6 +139,76 @@ Extending the cue-verb list further is still a real (if small) NLP-scope
 increase each time — each addition needs 2-3 independent real examples
 before being added, not a single occurrence.
 
+**A conditional-mood gap found and deliberately left unfixed (single
+example):** `"Báðir flokkarnir slyppu naumlega inn á þing með um 5,5
+prósenta fylgi"` ("both parties would barely make it into parliament with
+about 5.5% support") and `"Píratar féllu af þingi með 3,4%"` ("Pirates fell
+out of parliament with 3.4%") — article 427650 — are genuine current-poll
+figures (electoral-threshold framing: "would make it in" / "would fall out
+of" parliament) that `_POLL_CUE_RE` doesn't recognize (`slyppu`/`féllu`
+aren't in the verb list) and `_TREND_CUE_RE` doesn't cover either (no "úr X
+í Y"). Correctly logged as `[no poll cue]` and skipped rather than guessed —
+this is the second cue-verb gap found this way, and per the rule above it's
+still only one article's worth of evidence, so it stays a documented gap,
+not a fix.
+
+### Non-Party-Support Articles — RÚV's Tag Isn't Scoped to Fylgi
+
+RÚV's `skoðanakönnun` tag catches every public-opinion poll, not just
+party-support ones — leader-trust, minister job-approval, and policy
+questions ("Hversu ánægð/ur ertu með X?") all get tagged the same way and
+share the exact same verb vocabulary (`mælist`, `stendur`) as genuine
+fylgi-flokka sentences. Found as **three independent real false positives**
+in one round-5 sweep, each a different article entirely about something
+other than party support:
+
+- **ruv-458088** ("traust" — trust in individual ministers): `"Þeim sem bera
+  lítið traust til hennar fjölgar allnokkuð, úr 15 prósentum í 24
+  prósent."` has a trend cue and no in-sentence party, so it fell back to
+  `current_party` — stale from an earlier sentence naming "Flokks fólksins"
+  only as a possessive modifier ("Ráðherrar Flokks fólksins eru þeir sem
+  flestir vantreysta", about that party's *ministers*, not its poll
+  number). Produced a bogus `Flokkur fólksins: 24%` row.
+- **ruv-453144** ("ánægja" — satisfaction with the taxi market, broken down
+  by which party each respondent voted for): `"Minnst mælist hún í röðum
+  fylgismanna Vinstri grænna, 61 prósent."` and `"Mest mælist ánægjan ...
+  meðal Pírata."` both have a real poll-cue verb (`mælist`) and a party
+  name, but the party is a voter-subgroup descriptor ("supporters of X"),
+  not the sentence's own topic. Produced two bogus rows.
+- **ruv-458497** ("staðið sig vel/illa" — job-approval ratings for party
+  leaders): `"Sigurður Ingi stendur sig litlu betur, 58 prósent segja hann
+  hafa staðið sig illa."` — `stendur` (here the idiom "stendur sig" =
+  "performs", not "flokkurinn stendur í X prósentum") fired as a poll cue
+  with no in-sentence party, inheriting `current_party` from a `"formaður
+  Framsóknarflokksins"` mention two sentences earlier.
+
+Two guards, added together, close all three without touching any verified
+real party-support sentence (checked against the full regression set:
+451831, 428434, 467932, 468092, visir-20262884571, visir-20262904348 — none
+of them use this vocabulary):
+
+1. `_NON_SUPPORT_TOPIC_RE` (`ánægj\w*|óánægj\w*|traust\w*|vantreyst\w*|
+   staðið\s+sig|fylgismann\w*|kjósend\w*|kusu|kaus`) — a sentence whose
+   *own* topic is satisfaction/trust/approval, or which frames its number as
+   a voter-subgroup breakdown ("fylgismenn/kjósendur/kusu X"), is skipped
+   entirely regardless of which cue verb it contains. Same discipline as
+   `_AGGREGATE_RE`, different false-attribution shape.
+2. The pre-existing `party = current_party` pronoun fallback now also
+   requires an actual poll-cue verb in the sentence (not just a trend cue)
+   — a trend-cue-only sentence with no in-sentence party and no poll verb
+   skips rather than guessing (`ruv-458088`'s exact failure mode; both real
+   verified trend-cue examples, article 428434's `"Fylgi
+   Framsóknarflokksins fór úr..."` and `"Stuðningur við Sósíalistaflokkinn
+   eykst úr..."`, name their party in-sentence, so this costs nothing
+   against evidence seen so far).
+
+**A related, deliberately unexplored generalization:** whether an entire
+article should be skipped up front (e.g. if its title/subtitle never
+mentions `fylgi` at all) rather than filtering sentence-by-sentence. Not
+attempted — the per-sentence guards above already resolve every real
+false-positive case found, and an article-level topic classifier is a
+bigger, unverified step past what evidence currently supports.
+
 ## Article JSON Shape (from `__NEXT_DATA__`)
 
 ```json
@@ -452,6 +522,28 @@ Jónsson's party — verified appearing independently in both a Prósent-poll
 RÚV chart, 0.2%, and Heimildin prose, 1.4%, from a different poll — not a
 one-off), and the **Vinstri græn** regex was extended to also match its own
 full legal name (see above).
+
+## Chart-vs-Prose Completeness Check (Round 5)
+
+**Question:** when an article has a chart, does the chart's `aria-label` set
+ever silently miss a party that the article's own prose independently
+discusses with a real poll figure? This was the single longest-standing open
+item across rounds 3-4. Checked directly this round: ran
+`extract_prose_poll_figures()` against the same paragraphs `_scrape_article`
+already fetches, on 12 real chart-bearing RÚV articles spanning Feb 2026
+back to Nov 2024 (`ruv-479261`, `470704`, `468519`, `468092`, `467932`,
+`465942`, `464439`, `456759`, `454256`, `447033`, `434441`, `427475`), and
+diffed the two party sets.
+
+**Result: zero gaps.** Every party the prose names with a real poll-cue
+sentence is also present in that same article's chart. (The reverse is
+common and expected — the chart typically lists more parties than the prose
+restates, since prose only calls out the parties worth a sentence.)
+Two articles in the sample (`ruv-472674`, `458088`) had zero chart bars at
+all — already correctly routed to the prose-fallback path by the existing
+`if not parties:` gate, not a completeness gap. Chart extraction, where a
+chart exists, is not silently dropping parties the article's own text
+corroborates — this closes the item rather than just re-deferring it again.
 
 ## Party Regex Verified Against BÍN, Not Assumed From `\w*`
 

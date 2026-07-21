@@ -92,7 +92,8 @@ manual reading of the rendered page):
    number is consistently marked `nú` whenever a sentence states both. When
    `nú` is present with 2+ percent numbers, it wins outright over the
    verb-proximity check.
-3. **Nearest-party-to-number pairing, not first-party-in-sentence.**
+3. **Nearest-party-to-number pairing, not first-party-in-sentence — except
+   for strict enumerations, which need positional pairing instead.**
    Comparison sentences ("Sjálfstæðisflokkurinn er langstærstur austan
    Elliðaáa með 39%, ... Samfylkingin mælist með 19%") name two parties —
    pairing every number in the sentence with whichever party is named first
@@ -100,7 +101,29 @@ manual reading of the rendered page):
    must be measured edge-to-edge (`min` over the four start/end
    combinations), not start-to-start — start-to-start systematically
    penalizes a long party name immediately before the number in favor of a
-   short one further away.
+   short one further away. **But nearest-gap itself breaks on a longer
+   enumeration** — verified live user-testing on a real 9-party sentence
+   (`visir-20262884529`: `"...mælist Sjálfstæðisflokkurinn með 31,3% fylgi,
+   Samfylking með 21,5%, Vinstrið í 11,3%, Miðflokkur 10,9%, Viðreisn 9,8%,
+   Sósíalistar með 4,8%, Framsókn 4,7%, Píratar 2,3% og Flokkur fólksins
+   2,3%..."`) — because the connector before a number ("... með ", 5 chars)
+   is longer than the separator before the *next* party name (", ", 2
+   chars), nearest-gap silently attaches each number to the **following**
+   party instead of its own: Samfylking's 21.5% landed on Vinstrið,
+   Vinstrið's 11.3% on Miðflokkur, Sósíalistaflokkur's 4.8% on
+   Framsóknarflokkur — and Samfylking + Sósíalistaflokkur vanished from the
+   output entirely (their real numbers stolen by their neighbors). The same
+   silent shift was independently confirmed on a 2-party case
+   (`visir-20262884571`: `"Framsókn mælist með 6,1 prósent og
+   Sósíalistaflokkurinn 4,5 prósent fylgi."` — Sósíalistaflokkur had been
+   getting Framsókn's 6.1%, and Framsókn was dropped outright — this exact
+   article was already in the regression set for three prior rounds without
+   anyone noticing). **Fix:** when a sentence has exactly as many party
+   matches as percent matches (and more than one of each), pair them by
+   strict left-to-right position instead of nearest-gap — verified against
+   both the original two-party motivating case (still pairs identically)
+   and both enumeration bugs above (now pairs correctly). Nearest-gap is
+   kept as the fallback for every case where the counts don't match.
 4. **First mention per party wins; later re-mentions are ignored, not
    merged.** A party's topline citywide number is always stated once, early.
    Later re-mentions in the same article are sub-group breakdowns — verified
@@ -241,6 +264,23 @@ Both added to `_NON_SUPPORT_TOPIC_RE` alongside the round-5 terms. Checked
 against the full regression set plus every other article in the local cache
 that mentions `"prósentustig"` (428434, 429057, visir-20262859852,
 visir-20262847801, visir-20262904348) — all unchanged after the fix.
+
+**A remaining gap, found the same session and deliberately left unfixed
+(single example):** `"(?:er|eru)\s+með"` is generic Icelandic for "to
+have," not specific to polls — `visir-20262884111` (an income-bracket
+breakdown of majority preference, "hversu margir vilja vinstri/hægri
+meirihluta eftir tekjum") contains `"...þeirra sem eru með 800 til 999
+þúsund krónur í tekjur á mánuði, 55 prósent vilja vinstrimeirihluta en 45
+prósent hægri"` — `"eru með"` here means "have [an income of]," grammatically
+unconnected to the 55%/45% later in the same sentence, but it's still
+enough to satisfy the poll-cue check, and with no in-sentence party the
+55% fell back to a stale `current_party` ("Sósíalistaflokkur," set by an
+earlier `"kjósenda Sósíalistaflokksins"` sentence — itself correctly
+skipped by the `kjósend\w*` guard, since it has no percent to attach to).
+One occurrence so far, not this session's 2-3-independent-examples bar, and
+not needed to answer the request that surfaced it (a different article
+covering the same underlying poll already has this poll's real numbers) —
+documented rather than guarded.
 
 ## Article JSON Shape (from `__NEXT_DATA__`)
 

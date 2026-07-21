@@ -357,6 +357,31 @@ def extract_prose_poll_figures(paragraphs: list[str]) -> tuple[list[dict], list[
                     key=lambda m: min(abs(m.start() - p) for p in current_value_markers),
                 )
 
+            # A sentence enumerating N parties and N percents in strict
+            # left-to-right order ("Party1 með N1%, Party2 með N2%, Party3
+            # N3%, ...") pairs each number with whichever party precedes it
+            # — but nearest-GAP measurement (below) is fooled by connector-
+            # word-length asymmetry: "Samfylking með 21,5%," puts more
+            # characters between the number and ITS OWN party (the 5-char
+            # " með ") than between the number and the NEXT party name (a
+            # 2-char ", "), so nearest-gap silently picks the following
+            # party instead. Verified on a real 9-party enumeration
+            # (visir-20262884529, RÚV's Þjóðarpúls listing sentence quoted
+            # in full) — nearest-gap swapped Samfylking's 21.5% onto
+            # Vinstrið, Vinstrið's 11.3% onto Miðflokkur, and
+            # Sósíalistaflokkur's 4.8% onto Framsóknarflokkur, and dropped
+            # Samfylking and Sósíalistaflokkur from the output entirely.
+            # When party-count equals percent-count (and there's more than
+            # one of each), strict positional pairing is unambiguous and
+            # correct — checked against the original nearest-gap motivating
+            # case too (article 451831: "Sjálfstæðisflokkurinn ... 39
+            # prósenta fylgi þar, ... Samfylkingin, mælist með 19 prósent"
+            # positionally pairs identically to nearest-gap there, so this
+            # doesn't trade one bug for another).
+            positional_party = None
+            if len(party_matches) == len(percent_matches) and len(party_matches) > 1:
+                positional_party = dict(zip(percent_matches, party_matches))
+
             for pm in percent_matches:
                 if preferred is not None and pm is not preferred:
                     continue
@@ -392,10 +417,13 @@ def extract_prose_poll_figures(paragraphs: list[str]) -> tuple[list[dict], list[
                 # 21 chars) must not look farther away than a short one after
                 # it just because start-to-start distance ignores span length.
                 if party_matches:
-                    def _gap(pmatch):
-                        return max(0, max(pm.start() - pmatch.end(), pmatch.start() - pm.end()))
+                    if positional_party is not None:
+                        party_match = positional_party[pm]
+                    else:
+                        def _gap(pmatch):
+                            return max(0, max(pm.start() - pmatch.end(), pmatch.start() - pm.end()))
 
-                    party_match = min(party_matches, key=_gap)
+                        party_match = min(party_matches, key=_gap)
                     idx = next(i for i, g in party_match.groupdict().items() if g)
                     party = _PARTY_CANONICAL[int(idx[1:])]
                 elif _AGGREGATE_RE.search(sentence):

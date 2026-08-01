@@ -9,11 +9,20 @@ Two-stage pipeline:
      real `aria-label="<Party>, <pct>%."` attribute on each SVG <path> —
      that's the extraction target, not OCR or color-matching.
 
+Covers two topics from the same discovery pipeline: "parties" (fylgi
+flokka, the default) and "esb" (support for/against EU membership, ahead
+of the 2026-08-29 þjóðaratkvæðagreiðsla) — pass --topic to either
+subcommand. Discovery needs no topic-specific fetching (the same tag pages
+list both); only the answer vocabulary `fetch` applies differs. See the
+"Topic system" comment further down for the full rationale.
+
 Usage:
     uv run python scripts/skodanakannanir.py list
     uv run python scripts/skodanakannanir.py list --scope reykjavik
+    uv run python scripts/skodanakannanir.py list --source visir --topic esb
     uv run python scripts/skodanakannanir.py fetch 479261
     uv run python scripts/skodanakannanir.py fetch --all --limit 20
+    uv run python scripts/skodanakannanir.py fetch visir-20262915377 --topic esb
 """
 import argparse
 import asyncio
@@ -127,6 +136,88 @@ _PARTY_STEMS = [
 ]
 _PARTY_RE = re.compile("|".join(f"(?P<p{i}>{pat})" for i, (_, pat) in enumerate(_PARTY_STEMS)))
 _PARTY_CANONICAL = {i: name for i, (name, _) in enumerate(_PARTY_STEMS)}
+
+# --- Topic system ---------------------------------------------------------
+# "parties" (fylgi flokka, the original and default) and "esb" (support for/
+# against EU membership, ahead of the 2026-08-29 þjóðaratkvæðagreiðsla) share
+# this file's discovery machinery unchanged: Vísir's existing poll tag
+# already lists ESB articles alongside party-support ones (verified: 17 real
+# ESB articles found in the same /t/2296/skodanakannanir/ pages already
+# scraped for party polls, and RÚV's tag mixes in at least one too --
+# ruv-439725). Nothing about discovery needs to change; only which answer
+# vocabulary `fetch` applies, and which articles `list --topic` prints,
+# differ per topic -- see `_guess_topic` (discovery-time classification,
+# mirrors `_guess_scope`) and `_TOPIC_ANSWER_RE`/`_TOPIC_ANSWER_CANONICAL`
+# (extraction-time vocabulary dispatch).
+_ESB_ANSWER_STEMS = [
+    # Order matters: the multi-word "hvorki X né Y" alternative must be
+    # tried before the bare "hlynnt"/"andvíg" alternatives below it, or
+    # finditer would consume "fylgjandi" and "andvíg" as two SEPARATE
+    # matches from within one "hvorki fylgjandi né andvígir" phrase instead
+    # of one Óákveðin match -- verified live: this exact phrase (and its
+    # reordered variant "hvorki vera andvíg né hlynnt") appears in two
+    # independent real articles (visir-20262895588, visir-20262897210,
+    # visir-20262866089), both orderings needed ((vera\s+)? + either-order
+    # alternation) since real text uses both "fylgjandi...andvíg" and
+    # "andvíg...hlynnt" orderings.
+    # "declined to answer" has two independently-verified real phrasings
+    # ("vildu ekki svara" and "sögðust ekki vilja svara") -- both needed:
+    # relying on nearest-gap to attribute an unrecognized phrasing's number
+    # to the recognized "veit ekki" match nearby got it backwards on real
+    # data (visir-20262915377: "13,5 prósent svöruðu «Ég veit ekki» og 3,8
+    # prósent sögðust ekki vilja svara" -- the connector before the SECOND
+    # number is shorter than the quote-mark-laden connector before the
+    # first, so plain character-gap picked the wrong one; recognizing both
+    # phrasings as the same Óákveðin answer sidesteps the gap measurement
+    # entirely via positional pairing instead).
+    ("Óákveðin", r"hvorki\s+(?:vera\s+)?(?:fylgjandi|hlynnt\w*|andvíg\w*)\s+né\s+(?:vera\s+)?(?:fylgjandi|hlynnt\w*|andvíg\w*)"
+                 r"|óákveðin\w*|veit\s+ekki|vildu\s+ekki\s+svara|ekki\s+vilja\s+svara"),
+    ("Já", r"\bjá\b"),
+    ("Nei", r"\bnei\b"),
+    ("Hlynnt", r"hlynnt\w*|fylgjandi"),
+    ("Andvígt", r"andvíg\w*|mótfallin\w*"),
+]
+# Case-insensitive, unlike _PARTY_RE: these are ordinary Icelandic words
+# ("hlynnt", "já"), not proper nouns needing case to disambiguate from a
+# common word (contrast _PARTY_RE's deliberately case-sensitive "Vinstrið").
+_ESB_ANSWER_RE = re.compile(
+    "|".join(f"(?P<a{i}>{pat})" for i, (_, pat) in enumerate(_ESB_ANSWER_STEMS)), re.IGNORECASE
+)
+_ESB_ANSWER_CANONICAL = {i: name for i, (name, _) in enumerate(_ESB_ANSWER_STEMS)}
+
+# Two real cross-question false-positive risks, both found reading actual
+# ESB articles (not hypothesized): (1) "varnarbandalag" (NATO, the
+# Atlantshafsbandalag) is regularly polled in the SAME article as EU
+# membership, using the identical hlynnt/andvíg vocabulary, about a
+# different membership question entirely -- verified, visir-20262869821 and
+# visir-20262838574 both ask about ESB and NATO membership in adjacent
+# sentences. (2) "upptöku evru" (adopting the euro) is a separate question
+# some of the same commissioned polls ask alongside EU membership itself --
+# verified, visir-20262914497's SA-members survey reports both, and without
+# this exclusion the euro figure was silently recorded as if it were the
+# membership figure (the article's only other "Hlynnt" mention, so nothing
+# else would have caught it).
+_ESB_EXCLUDE_RE = re.compile(r"varnarbandalag\w*|upptöku\s+evru|evru\s+sem\s+gjaldmiðli", re.IGNORECASE)
+
+# "nú"/"í dag" (now/today) vs. "í fyrra" (last year) mark which of two
+# numbers in one sentence is the current poll figure vs. a year-ago
+# comparison -- verified, visir-20262869821: "46 prósent segjast vera
+# andvíg aðild í dag en sá fjöldi var 39,8 prósent ... í fyrra." Nearest-gap
+# to the current marker ALONE gets this backwards: "í dag" sits physically
+# between the two numbers (end of the first clause), so raw proximity
+# favors the second, later number even though "í dag" grammatically
+# modifies the first — the same connector-length-asymmetry trap as the
+# positional-pairing fix elsewhere in this file, in a new shape. Ranking by
+# (distance to nearest current marker) minus (distance to nearest
+# historical marker) instead — see the "one answer, several numbers" branch
+# of extract_esb_prose_figures — correctly favors whichever number is
+# relatively closer to "now" than to "last year", not just closer to "í
+# dag" in absolute terms.
+_ESB_CURRENT_MARKER_RE = re.compile(r"\bnú\b|\bí\s+dag\b", re.IGNORECASE)
+_ESB_HISTORICAL_MARKER_RE = re.compile(r"í\s+fyrra\b|síðustu\s+könnun\w*", re.IGNORECASE)
+
+_TOPIC_ANSWER_RE = {"parties": _PARTY_RE, "esb": _ESB_ANSWER_RE}
+_TOPIC_ANSWER_CANONICAL = {"parties": _PARTY_CANONICAL, "esb": _ESB_ANSWER_CANONICAL}
 
 _APPROX_RE = re.compile(r"\b(rúm(?:t|lega)?|tæp(?:t|lega)?|um)\s+$")
 
@@ -291,6 +382,22 @@ def _sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
 
 
+def _span_gap(a, b) -> int:
+    """Character gap between two regex match spans, edge-to-edge, not
+    start-to-start: a long name/word immediately before a number must not
+    look farther away than a short one further off just because
+    start-to-start distance ignores span length. Shared by the party and
+    ESB prose parsers' nearest-mention pairing."""
+    return max(0, max(a.start() - b.end(), b.start() - a.end()))
+
+
+def _point_gap(match, pos: int) -> int:
+    """Character gap between a regex match span and a bare position (e.g.
+    a marker word's start index), edge-to-edge — same rationale as
+    _span_gap, for the ESB parser's current-vs-historical marker ranking."""
+    return max(0, match.start() - pos, pos - match.end())
+
+
 def extract_prose_poll_figures(paragraphs: list[str]) -> tuple[list[dict], list[str]]:
     """Party/percent pairs from prose, for articles with no chart.
 
@@ -420,10 +527,7 @@ def extract_prose_poll_figures(paragraphs: list[str]) -> tuple[list[dict], list[
                     if positional_party is not None:
                         party_match = positional_party[pm]
                     else:
-                        def _gap(pmatch):
-                            return max(0, max(pm.start() - pmatch.end(), pmatch.start() - pm.end()))
-
-                        party_match = min(party_matches, key=_gap)
+                        party_match = min(party_matches, key=lambda pmatch: _span_gap(pm, pmatch))
                     idx = next(i for i, g in party_match.groupdict().items() if g)
                     party = _PARTY_CANONICAL[int(idx[1:])]
                 elif _AGGREGATE_RE.search(sentence):
@@ -483,6 +587,142 @@ def extract_prose_poll_figures(paragraphs: list[str]) -> tuple[list[dict], list[
                 seen_parties.add(party)
 
     return results, skipped
+
+
+def extract_esb_prose_figures(paragraphs: list[str]) -> tuple[list[dict], list[str]]:
+    """Yes/no/support/oppose figures for the "esb" topic, from prose.
+
+    A parallel function to `extract_prose_poll_figures`, not a branch of it
+    — the shapes genuinely differ. An ESB answer term (já/nei/hlynnt/andvígt/
+    óákveðin) is almost always named in the SAME sentence as its percentage,
+    so there's no need for party-support's cross-sentence pronoun carryover
+    (`current_party`). What ESB articles have instead, that party articles
+    don't: the small, closed hlynnt/andvígt vocabulary gets reused across
+    genuinely different survey questions in one article — EU membership
+    itself, resuming accession talks, euro adoption, NATO membership — since
+    a party's name is never ambiguous about which question it answers, but
+    "46 prósent andvíg" needs its subject read from context. `_ESB_EXCLUDE_RE`
+    filters the two confirmed cross-question false-positive risks (NATO,
+    euro adoption). "First mention per answer label wins" (same rule and
+    same rationale as parties' first-mention-per-party) is the tie-breaker
+    when an article covers more than one EU-related question with the same
+    wording — a real, deliberately undocumented-away gap: visir-20262869821
+    asks about "aðild" and "aðildarviðræður" as two separate questions with
+    different answers, and only the first-seen sentence per label survives.
+    """
+    results = []
+    skipped = []
+    seen_answers: set[str] = set()
+
+    for para in paragraphs:
+        for sentence in _sentences(para):
+            percent_matches = list(_PERCENT_RE.finditer(sentence))
+            if not percent_matches:
+                continue
+
+            if _NON_SUPPORT_TOPIC_RE.search(sentence):
+                skipped.append(f"[non-support topic (subgroup breakdown), not a topline answer] {sentence}")
+                continue
+            if _ESB_EXCLUDE_RE.search(sentence):
+                skipped.append(f"[off-topic — NATO or euro-adoption question, not EU membership] {sentence}")
+                continue
+
+            answer_matches = list(_ESB_ANSWER_RE.finditer(sentence))
+            if not answer_matches:
+                skipped.append(f"[no recognized answer term (já/nei/hlynnt/andvígt/óákveðin)] {sentence}")
+                continue
+
+            if len(answer_matches) == len(percent_matches) and len(percent_matches) > 1:
+                # Strict left-to-right positional pairing — same rationale
+                # as the party parser's enumeration fix: with equal counts,
+                # pairing by index is unambiguous and sidesteps nearest-gap's
+                # connector-length bias entirely.
+                pairs = list(zip(percent_matches, answer_matches))
+            elif len(percent_matches) == 1:
+                pairs = [(percent_matches[0], min(answer_matches, key=lambda a: _span_gap(percent_matches[0], a)))]
+            elif len(answer_matches) == 1 and len(percent_matches) > 1:
+                # One answer term, several numbers — verified pattern: a
+                # current-vs-year-ago comparison in one sentence ("46
+                # prósent ... í dag en ... 39,8 prósent ... í fyrra",
+                # visir-20262869821). Rank by (distance to nearest current
+                # marker) minus (distance to nearest historical marker), not
+                # nearest-current-marker alone — see _ESB_CURRENT_MARKER_RE's
+                # docstring for why plain proximity to "í dag" picks the
+                # WRONG number here (it sits closer, in raw characters, to
+                # the later "í fyrra" clause than to the number it actually
+                # modifies).
+                current_markers = [m.start() for m in _ESB_CURRENT_MARKER_RE.finditer(sentence)]
+                historical_markers = [m.start() for m in _ESB_HISTORICAL_MARKER_RE.finditer(sentence)]
+                if current_markers or historical_markers:
+                    # A missing marker class contributes a large FINITE
+                    # distance, never float("inf"): inf minus any finite gap
+                    # (or the reverse) collapses every candidate's rank to
+                    # the same ±inf, so min() silently degenerates to "first
+                    # number in the sentence" whenever only ONE marker class
+                    # is present. len(sentence) bounds every real gap, so a
+                    # current-marker-only sentence reduces to plain
+                    # nearest-to-current and a historical-only one to
+                    # farthest-from-historical — the intended one-sided
+                    # behaviors.
+                    no_marker_gap = len(sentence)
+
+                    def _current_vs_historical_rank(pm):
+                        cur_d = min((_point_gap(pm, p) for p in current_markers), default=no_marker_gap)
+                        hist_d = min((_point_gap(pm, p) for p in historical_markers), default=no_marker_gap)
+                        return cur_d - hist_d
+
+                    chosen = min(percent_matches, key=_current_vs_historical_rank)
+                else:
+                    chosen = min(percent_matches, key=lambda pm: _span_gap(pm, answer_matches[0]))
+                pairs = [(chosen, answer_matches[0])]
+                for pm in percent_matches:
+                    if pm is not chosen:
+                        skipped.append(
+                            "[extra number alongside a single answer term, not paired — likely "
+                            f"historical/comparison or a differently-worded answer] {sentence}"
+                        )
+            else:
+                # More recognized answer terms don't reliably outnumber
+                # percent figures in practice, but when percent figures
+                # outnumber recognized answer terms with neither of the
+                # above shapes, an unrecognized label (e.g. "jákvæð"/
+                # "neikvæð", not in _ESB_ANSWER_STEMS — ambiguous with the
+                # NATO framing, see _ESB_ANSWER_STEMS) is almost certainly
+                # sharing the sentence — verified live, visir-20262915377 and
+                # visir-20262897210 both repeat the exact sentence "sögðust
+                # 53,1 prósent vera jákvæðir en 46,9 prósent andvígir.",
+                # where nearest-gap against the lone "andvígir" match would
+                # have wrongly pulled the unrelated 53,1 number onto it too.
+                # Left ambiguous rather than guessed.
+                skipped.append(
+                    f"[{len(percent_matches)} percent figures vs {len(answer_matches)} recognized "
+                    f"answer terms — ambiguous pairing, not guessed] {sentence}"
+                )
+                continue
+
+            for pm, am in pairs:
+                idx = next(i for i, g in am.groupdict().items() if g)
+                answer = _ESB_ANSWER_CANONICAL[int(idx[1:])]
+
+                if answer in seen_answers:
+                    skipped.append(f"[{answer} already recorded, later mention ignored] {sentence}")
+                    continue
+
+                try:
+                    pct = _word_to_number(pm.group("num"))
+                except (ValueError, KeyError):
+                    skipped.append(f"[unparsed number {pm.group('num')!r}] {sentence}")
+                    continue
+
+                results.append(
+                    {"party": answer, "pct": pct, "approx": bool(pm.group("approx")), "source": "prose"}
+                )
+                seen_answers.add(answer)
+
+    return results, skipped
+
+
+_TOPIC_EXTRACTORS = {"parties": extract_prose_poll_figures, "esb": extract_esb_prose_figures}
 
 
 # Methodology fields (sample size, response rate) — the highest-value gap
@@ -577,6 +817,33 @@ def _guess_pollster(title: str, subtitle: str) -> str | None:
     return None
 
 
+# Discovery-time topic classification, same shape as _guess_scope (title +
+# subtitle text, no article fetch needed). Only standalone always-EU-specific
+# terms trigger (ESB, Evrópusamband, evrusvæði, aðildarviðræður); bare
+# "aðild" deliberately does NOT — Iceland also has NATO "aðild", union
+# "aðild", etc. Verified against the full cached RÚV+Vísir listing (224
+# articles, 2021–2026): every real "aðild" headline co-occurred with one of
+# these explicit anchors in the same title+subtitle, so the anchors alone
+# correctly isolated all 17 real ESB articles (visir-20262915377,
+# -20262914497, -20262902621, -20262897210, -20262895588, -20262869821,
+# -20262866297, -20262866089, -20262853438, -20262853308, -20262838574,
+# -20262827389, -20252778690, -20252713411, -20252711824, -20252672905,
+# -20252670671) with zero unrelated party-support articles pulled in. An
+# earlier draft also carried "aðild within 40 chars of an anchor"
+# alternatives — dead code by construction (any string they match already
+# contains a standalone anchor), removed rather than left narrating a
+# constraint they never enforced.
+_ESB_TOPIC_RE = re.compile(
+    r"\bESB\b|Evrópusamband\w*|evrusvæð\w*|aðildarviðræð\w*",
+    re.IGNORECASE,
+)
+
+
+def _guess_topic(title: str, subtitle: str) -> str:
+    text = f"{title} {subtitle or ''}"
+    return "esb" if _ESB_TOPIC_RE.search(text) else "parties"
+
+
 # Chart aria-labels — verified across both RÚV and Vísir Highcharts embeds —
 # carry the party name as the chart tool's own label text, completely
 # independent of _PARTY_RE: e.g. "Samfylkingin" (not "Samfylking"),
@@ -597,15 +864,19 @@ def _guess_pollster(title: str, subtitle: str) -> str | None:
 _CHART_NON_PARTY_LABELS = {"önnur framboð", "aðrir", "aðrir listar", "annað"}
 
 
-def _canonicalize_chart_party(raw_label: str) -> tuple[str | None, bool]:
-    """Returns (party_name_or_None, was_recognized). party_name is None
-    for confirmed non-party catch-all labels ("Önnur framboð")."""
-    if raw_label.strip().lower() in _CHART_NON_PARTY_LABELS:
+def _canonicalize_chart_answer(raw_label: str, topic: str = "parties") -> tuple[str | None, bool]:
+    """Returns (answer_name_or_None, was_recognized). answer_name is None
+    for confirmed non-party catch-all labels ("Önnur framboð") — parties
+    topic only; no such catch-all is verified for esb charts (none of the
+    17 confirmed ESB articles carry a chart at all — see the
+    skodanakannanir SKILL's Vísir Extraction section — so this path is
+    exercised by the party topic exclusively today)."""
+    if topic == "parties" and raw_label.strip().lower() in _CHART_NON_PARTY_LABELS:
         return None, True
-    m = _PARTY_RE.search(raw_label)
+    m = _TOPIC_ANSWER_RE[topic].search(raw_label)
     if m:
         idx = next(i for i, g in m.groupdict().items() if g)
-        return _PARTY_CANONICAL[int(idx[1:])], True
+        return _TOPIC_ANSWER_CANONICAL[topic][int(idx[1:])], True
     return raw_label, False
 
 
@@ -629,6 +900,7 @@ def fetch_article_list() -> list[dict]:
             "published_at": a.get("first_published_at"),
             "scope": _guess_scope(a["title"], a.get("subtitle")),
             "pollster": _guess_pollster(a["title"], a.get("subtitle")),
+            "topic": _guess_topic(a["title"], a.get("subtitle")),
         }
     return sorted(seen.values(), key=lambda r: r["published_at"] or "", reverse=True)
 
@@ -704,6 +976,7 @@ def fetch_visir_article_list(max_pages: int = 40, stop_before_year: int | None =
                 "published_at": published_at,
                 "scope": _guess_scope(title, subtitle),
                 "pollster": _guess_pollster(title, subtitle),
+                "topic": _guess_topic(title, subtitle),
             }
 
         if stop_before_year and not page_had_recent_enough:
@@ -735,7 +1008,7 @@ _VISIR_PARA_RE = re.compile(r"<p[^>]*>(.*?)</p>", re.S)
 _VISIR_CHART_RE = re.compile(r'path[^>]*aria-label="([^"]*%[^"]*)"')
 
 
-def fetch_visir_article(url: str) -> dict:
+def fetch_visir_article(url: str, topic: str = "parties") -> dict:
     from html import unescape
 
     resp = httpx.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
@@ -749,11 +1022,11 @@ def fetch_visir_article(url: str) -> dict:
         m = re.match(r"^(.+?),\s*([\d.,]+)\s*%\.?$", label.strip())
         if not m:
             continue
-        party, recognized = _canonicalize_chart_party(m.group(1).strip())
+        party, recognized = _canonicalize_chart_answer(m.group(1).strip(), topic)
         if party is None:
             continue  # confirmed non-party catch-all label ("Önnur framboð")
         if not recognized:
-            skipped.append(f"[unrecognized chart party label, kept as-is] {party!r}")
+            skipped.append(f"[unrecognized chart answer label, kept as-is] {party!r}")
         parties.append({"party": party, "pct": float(m.group(2).replace(",", "."))})
 
     # Paragraphs are extracted unconditionally, not just on the prose
@@ -775,7 +1048,7 @@ def fetch_visir_article(url: str) -> dict:
             paragraphs.append(text)
 
     if not parties:
-        prose_results, skipped = extract_prose_poll_figures(paragraphs)
+        prose_results, skipped = _TOPIC_EXTRACTORS[topic](paragraphs)
         for r in prose_results:
             parties.append({"party": r["party"], "pct": r["pct"], "approx": r["approx"]})
         source = "prose" if prose_results else "none"
@@ -863,6 +1136,7 @@ def fetch_heimildin_article_list(
                 "published_at": published_at,
                 "scope": _guess_scope(title, subtitle),
                 "pollster": _guess_pollster(title, subtitle),
+                "topic": _guess_topic(title, subtitle),
             }
 
         if stop_before_year and not page_had_recent_enough:
@@ -956,7 +1230,9 @@ def cmd_list(args):
 
     shown = [
         a for a in articles
-        if (not args.scope or a["scope"] == args.scope) and "duplicate_of" not in a
+        if (not args.scope or a["scope"] == args.scope)
+        and (not args.topic or a.get("topic", "parties") == args.topic)
+        and "duplicate_of" not in a
     ]
     n_cross_reported = sum(1 for a in articles if "duplicate_of" in a)
     summary = f"{len(shown)} distinct poll articles"
@@ -968,12 +1244,16 @@ def cmd_list(args):
     for a in shown[: args.limit]:
         pollster = a["pollster"] or "?"
         also = f" [+{len(a['also_reported_by'])} more]" if a.get("also_reported_by") else ""
-        print(f"  [{a['id']}] {(a['published_at'] or '?????????')[:10]} ({a['source']}, {a['scope']}, {pollster}) {a['title']}{also}")
+        # Non-default topics are tagged so a mixed listing shows which
+        # articles fetch will treat as ESB; the "parties" default stays
+        # untagged to keep the common all-parties view unchanged.
+        topic = f", {a['topic']}" if a.get("topic", "parties") != "parties" else ""
+        print(f"  [{a['id']}] {(a['published_at'] or '?????????')[:10]} ({a['source']}, {a['scope']}, {pollster}{topic}) {a['title']}{also}")
     for line in dedupe_skipped:
         print(f"  {line}")
 
 
-async def _scrape_article(page, url: str) -> dict:
+async def _scrape_article(page, url: str, topic: str = "parties") -> dict:
     """Scrape one article's poll figures from an already-open Playwright
     page. Browser/page lifecycle is the caller's job (see _fetch_targets) —
     launching a fresh Chromium per article cost ~1-2s of pure relaunch
@@ -992,11 +1272,11 @@ async def _scrape_article(page, url: str) -> dict:
         m = re.match(r"^(.+?),\s*([\d.,]+)\s*%\.?$", label.strip())
         if not m:
             continue
-        party, recognized = _canonicalize_chart_party(m.group(1).strip())
+        party, recognized = _canonicalize_chart_answer(m.group(1).strip(), topic)
         if party is None:
             continue  # confirmed non-party catch-all label ("Önnur framboð")
         if not recognized:
-            skipped.append(f"[unrecognized chart party label, kept as-is] {party!r}")
+            skipped.append(f"[unrecognized chart answer label, kept as-is] {party!r}")
         parties.append({"party": party, "pct": float(m.group(2).replace(",", "."))})
 
     # Scoped to .article-body, not all of <main>: the page footer/sidebar
@@ -1017,7 +1297,7 @@ async def _scrape_article(page, url: str) -> dict:
         # teaser excerpts (rendered inline in .article-body, same as
         # real paragraphs) from overwriting this article's own topline
         # numbers.
-        prose_results, skipped = extract_prose_poll_figures(paragraphs)
+        prose_results, skipped = _TOPIC_EXTRACTORS[topic](paragraphs)
         for r in prose_results:
             parties.append({"party": r["party"], "pct": r["pct"], "approx": r["approx"]})
         source = "prose" if prose_results else "none"
@@ -1047,6 +1327,13 @@ async def _fetch_targets(targets: list[dict]) -> tuple[list[tuple[dict, dict]], 
     A single article's failure must not lose every already-fetched article
     in this batch (verified: a RÚV Playwright page.goto TimeoutError, 9
     articles into a real --all --limit 10 run) — continue past it.
+
+    Each target's `topic` key (set by the caller — see cmd_fetch) picks its
+    extraction vocabulary. A single `--all` batch mixes topics freely: an
+    article's own topic (as classified at discovery time by `_guess_topic`)
+    is the default, so party-support and ESB articles in the same cached
+    listing are each scraped with the right vocabulary automatically,
+    without the caller having to split the batch by topic.
     """
     from playwright.async_api import async_playwright
 
@@ -1056,16 +1343,17 @@ async def _fetch_targets(targets: list[dict]) -> tuple[list[tuple[dict, dict]], 
     try:
         async with async_playwright() as p:
             for meta in targets:
-                print(f"  fetching [{meta['id']}] {meta['title']} ...")
+                topic = meta.get("topic") or "parties"
+                print(f"  fetching [{meta['id']}] ({topic}) {meta['title']} ...")
                 try:
                     if meta["source"] == "visir":
-                        result = fetch_visir_article(meta["url"])
+                        result = fetch_visir_article(meta["url"], topic)
                     else:
                         if browser is None:
                             browser = await p.chromium.launch(headless=True)
                         page = await browser.new_page()
                         try:
-                            result = await _scrape_article(page, meta["url"])
+                            result = await _scrape_article(page, meta["url"], topic)
                         finally:
                             await page.close()
                 except Exception as exc:
@@ -1115,6 +1403,15 @@ def cmd_fetch(args):
         print("Provide an article id or --all", file=sys.stderr)
         sys.exit(1)
 
+    # --topic forces every target's vocabulary; omitted, each target uses
+    # its own topic from discovery-time classification (falling back to
+    # "parties" for articles listed before this field existed) — see
+    # _fetch_targets's docstring for why this is the default rather than a
+    # single global topic.
+    if args.topic:
+        for t in targets:
+            t["topic"] = args.topic
+
     fetched, failed = asyncio.run(_fetch_targets(targets))
 
     rows = []
@@ -1130,6 +1427,7 @@ def cmd_fetch(args):
                     "scope": meta["scope"],
                     "pollster": meta["pollster"],
                     "title": meta["title"],
+                    "topic": meta.get("topic") or "parties",
                     "party": p["party"],
                     "pct": p["pct"],
                     "approx": p.get("approx", False),
@@ -1160,16 +1458,22 @@ def cmd_fetch(args):
         )
     df = df.sort(["published_at", "article_id", "party"])
     df.write_csv(out_file)
-    print(f"{len(rows)} party-support rows written -> {out_file}")
+    print(f"{len(rows)} poll-figure rows written -> {out_file}")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_list = sub.add_parser("list", help="List poll articles from RÚV and/or Vísir")
+    p_list = sub.add_parser("list", help="List poll articles from RÚV, Vísir and/or Heimildin")
     p_list.add_argument("--scope", choices=["national", "reykjavik"], default=None)
     p_list.add_argument("--source", choices=["ruv", "visir", "heimildin", "all"], default="ruv")
+    p_list.add_argument(
+        "--topic", choices=["parties", "esb"], default=None,
+        help="Filter the printed listing to one topic (party support vs. EU-membership polls); "
+        "default: show both. Filters the printed view only, same as --scope — "
+        "articles.json always stores the full unfiltered set.",
+    )
     p_list.add_argument(
         "--since", type=int, default=None,
         help="Earliest year to keep (Vísir only — paginates back through 2021; RÚV's tag window is already short)",
@@ -1177,9 +1481,14 @@ def main():
     p_list.add_argument("--limit", type=int, default=20)
     p_list.set_defaults(func=cmd_list)
 
-    p_fetch = sub.add_parser("fetch", help="Scrape party-support numbers from one or more articles")
+    p_fetch = sub.add_parser("fetch", help="Scrape party-support or ESB-membership numbers from one or more articles")
     p_fetch.add_argument("article_id", type=str, nargs="?", default=None)
     p_fetch.add_argument("--all", action="store_true", help="Fetch every listed article")
+    p_fetch.add_argument(
+        "--topic", choices=["parties", "esb"], default=None,
+        help="Force this topic's answer vocabulary for every target; default: auto-detect per "
+        "article from list's topic classification (falls back to 'parties' if unclassified).",
+    )
     p_fetch.add_argument("--limit", type=int, default=10)
     p_fetch.set_defaults(func=cmd_fetch)
 

@@ -1,6 +1,6 @@
 ---
 name: skodanakannanir
-description: RÚV + Vísir + Heimildin opinion-poll aggregators (skoðanakannanir) — national Alþingi and Reykjavík city party support across pollsters (Maskína, Prósent, Gallup).
+description: RÚV + Vísir + Heimildin opinion-poll aggregators (skoðanakannanir) — party support (Alþingi + Reykjavík) and EU-membership (ESB) polling across pollsters.
 ---
 
 # Skoðanakannanir — RÚV + Vísir + Heimildin Opinion-Poll Aggregators
@@ -9,7 +9,9 @@ Three outlets' discovery mechanisms, each surfacing news coverage of opinion
 polls from every major Icelandic pollster — not just one firm's own
 dashboard. Use this skill for "what's the latest party support / fylgi
 flokka" questions, at either national (Alþingi) or Reykjavík city
-(borgarstjórn) level.
+(borgarstjórn) level — and, via `--topic esb`, for EU-membership
+support/oppose polling ahead of the 2026-08-29 referendum
+(þjóðaratkvæðagreiðsla); see "Topic System" below.
 
 **Use Vísir/Heimildin for discovery, RÚV for numbers.** Verified: RÚV's tag
 page holds only ~51 recent items with no working pagination (see Caveat 7),
@@ -579,8 +581,10 @@ repeatedly named as the highest-value gap in earlier eval rounds — would
 have silently split one party into several rows keyed on whatever label
 string that specific chart happened to use.
 
-`_canonicalize_chart_party(raw_label)` fixes this: matched against
-`_PARTY_RE` the same way prose is, with two additions:
+`_canonicalize_chart_answer(raw_label, topic="parties")` fixes this
+(renamed from `_canonicalize_chart_party` when the topic system — see
+below — generalized it to also dispatch on `esb` vocabulary): matched
+against `_PARTY_RE` the same way prose is, with two additions:
 - **`"Önnur framboð"`** ("other lists," a genuine non-party catch-all some
   charts include) is explicitly dropped, not treated as an unknown party.
 - **A label matching no known party and no known catch-all is kept as-is**
@@ -675,6 +679,174 @@ printed, recorded, and the loop continues; the CSV is written from whatever
 succeeded, with a `N article(s) failed and were skipped` summary. Re-ran the
 identical failing batch afterward — it now completes, 46 rows written, 1
 article cleanly reported as failed instead of the whole run vanishing.
+
+## Topic System — ESB Membership Alongside Party Support
+
+**`--topic` generalizes this skill from party-support-only to any topic
+sharing the same discovery pipeline.** Two topics exist today: `parties`
+(fylgi flokka, the default and everything documented above) and `esb`
+(support for/against EU membership, ahead of the 2026-08-29
+þjóðaratkvæðagreiðsla). **Discovery needs no topic-specific fetching** —
+Vísir's existing poll tag already lists ESB articles alongside
+party-support ones (confirmed live: 17 real ESB articles found in the same
+`/t/2296/skodanakannanir/` pages already scraped for party polls, e.g.
+"Fleiri andvígir aðild nú en í fyrra", "Meirihluti aðildarfyrirtækjanna
+andvígur"; RÚV's tag mixes in at least one too — `ruv-439725`, "Þrír af
+hverjum fjórum sjá kosti við aðild að Evrópusambandinu"). Only the
+extraction/canonicalization layer and `list`'s printed-view filter change
+per topic — `_guess_topic()` classifies each article at discovery time from
+title+subtitle (same shape as `_guess_scope`), and `_TOPIC_EXTRACTORS`/
+`_TOPIC_ANSWER_RE`/`_TOPIC_ANSWER_CANONICAL` pick the right vocabulary at
+`fetch` time. **`esbvaktin.is` and Maskína's 2019 ESB PDF report are not
+useful sources for this** — checked before building this: `esbvaktin.is`
+has no API (verified: zero XHR/fetch calls on page load, common API paths
+all 404) and is a claims/fact-check database, not raw poll numbers; the PDF
+is a static one-off document, not live/API. Both traced back to the same
+RÚV/Vísir/Maskína primary sources this skill already targets.
+
+### `_guess_topic` — Discovery-Time Classification
+
+`_ESB_TOPIC_RE` triggers only on standalone always-EU-specific terms (`ESB`,
+`Evrópusamband\w*`, `evrusvæð\w*`, `aðildarviðræð\w*`) — **bare `aðild`
+alone is not trusted**, since Iceland also has NATO `aðild`, union `aðild`,
+etc. Verified against the full cached RÚV+Vísir listing (224 articles,
+2021–2026): every real `aðild` headline co-occurred with one of these
+explicit anchors in the same title+subtitle — no false positive in that
+sample — and the anchors alone correctly isolated all 17 real ESB articles
+in it with zero unrelated party-support articles pulled in. (An earlier
+draft also carried "`aðild` within 40 chars of an anchor" alternatives;
+they were dead code — any string they match already contains a standalone
+anchor — and were removed.)
+
+`--topic` on `list` filters the **printed view only**, the same way
+`--scope` already does (see Caveat 2) — `articles.json` always holds the
+full unfiltered set for whatever `--source` was requested, with `topic`
+stored per-article. `fetch --all` does **not** filter by topic by default —
+it fetches every cached RÚV/Vísir article and uses each one's own
+classified topic automatically (falling back to `parties` for articles
+listed before this field existed), so a single `--all` batch correctly
+mixes party-support and ESB extraction without the caller splitting it by
+topic. Passing `--topic` explicitly to `fetch` forces every target in that
+run to use that vocabulary regardless of its own classification — useful to
+override a misclassified article, not needed for the common case (a bare
+`fetch visir-<id>` already auto-detects from the article's own stored
+topic).
+
+### ESB Answer Vocabulary
+
+`_ESB_ANSWER_STEMS` recognizes `Já`/`Nei`/`Hlynnt` (incl. `fylgjandi`)/
+`Andvígt` (incl. `mótfallin`)/`Óákveðin` (`veit ekki`, `vildu ekki svara`,
+`ekki vilja svara`, `hvorki fylgjandi né andvígt` in either word order).
+`Já`/`Nei` are kept as their own canonical labels, deliberately not merged
+into `Hlynnt`/`Andvígt` — they answer the literal referendum-ballot framing
+("myndir þú segja já/nei í ágúst") rather than the general support/oppose
+framing, and Icelandic polling coverage reports both framings from the same
+underlying poll without treating them as interchangeable; collapsing them
+would blur a real methodological distinction. `extract_esb_prose_figures()`
+is a parallel function to `extract_prose_poll_figures()`, not a branch of
+it — an ESB answer term is almost always named in the same sentence as its
+percentage (no need for the party parser's cross-sentence `current_party`
+pronoun carryover), but the small, closed vocabulary gets reused across
+genuinely different survey questions within one article (EU membership
+itself, resuming accession talks, euro adoption, NATO membership) in a way
+a party's proper name never is.
+
+**Chart canonicalization is generalized too** (`_canonicalize_chart_party`
+→ `_canonicalize_chart_answer(raw_label, topic)`), though unexercised for
+`esb` in practice: none of the 17 confirmed ESB articles carry a chart —
+all are prose-only (Vísir's house style, consistent with the Vísir
+Extraction section above).
+
+Verified end-to-end against 5 real ESB articles (hand-checked against the
+actual article text, not just "it produced some numbers"):
+
+```
+visir-20262915377 "Meirihluti ætlar að segja já í ágúst"
+  → Já: 53.0, Nei: 47.0, Óákveðin: 13.5, Andvígt: 46.9
+
+visir-20262897210 "Fleiri hlynntir en andvígir samkvæmt nýrri könnun"
+  → Hlynnt: 44.5, Andvígt: 39.4, Óákveðin: 14.6
+
+visir-20262895588 "Fleiri andvígir inngöngu í ESB"
+  → Andvígt: 54.0, Hlynnt: 46.0, Óákveðin: 13.0
+
+visir-20262914497 "Meirihluti aðildarfyrirtækjanna andvígur" (SA members' survey)
+  → Andvígt: 66.0
+
+visir-20262869821 "Fleiri andvígir aðild nú en í fyrra"
+  → Andvígt: 46.0, Hlynnt: 42.0
+```
+
+### Three Real False-Positive Risks, Found Reading Actual Articles
+
+Not hypothesized — each caught by tracing a real article's extraction by
+hand before trusting it, the same discipline as every other guard in this
+file:
+
+1. **NATO ("varnarbandalag") is polled in the same article as EU
+   membership, with the identical hlynnt/andvíg vocabulary.**
+   `visir-20262869821` and `visir-20262838574` both ask about ESB and NATO
+   membership in adjacent sentences ("72 prósent aðspurðra eru jákvæð
+   gagnvart aðild þjóðarinnar að **varnarbandalaginu**"). `_ESB_EXCLUDE_RE`
+   drops any sentence containing `varnarbandalag\w*` outright.
+2. **Euro adoption ("upptöku evru") is a separate question some of the same
+   commissioned polls ask alongside EU membership itself.**
+   `visir-20262914497`'s SA-members survey reports both ("Fleiri eru þó
+   **hlynnt upptöku evru** eða alls 36 prósent... en... 41 prósent er
+   andvígur") — without excluding this, the euro figure was silently
+   recorded as if it were the membership figure, since it was the
+   article's only other `Hlynnt` mention and nothing else would have
+   caught it. Also dropped by `_ESB_EXCLUDE_RE`.
+3. **"Declined to answer" has (at least) two independently-verified real
+   phrasings that must both be recognized as the same `Óákveðin` answer, or
+   nearest-gap pairing gets the number backwards.** `visir-20262915377`:
+   *"13,5 prósent svöruðu «Ég veit ekki» og 3,8 prósent **sögðust ekki vilja
+   svara**."* Only `veit ekki` was recognized at first — with just that one
+   answer term and two numbers, nearest-gap measures raw character distance
+   to each, and the second number ("3,8 prósent sögðust ekki...") happens
+   to sit fewer characters from "veit ekki" than the first number does
+   (which is separated from it by the quoted "«Ég veit ekki»" itself), so
+   nearest-gap picked 3,8 instead of the correct 13,5. Recognizing both
+   `veit ekki` and `ekki vilja svara`/`vildu ekki svara` as the same answer
+   sidesteps the gap measurement entirely via positional pairing instead of
+   proximity.
+
+### The "nú"/"í dag" vs. "í fyrra" Trap
+
+A sentence stating both a current figure and a year-ago comparison in one
+breath needs the SAME number-picking care the party parser's "nú" handling
+already established — but a naive port of that exact logic gets it wrong
+here. Verified, `visir-20262869821`: *"46 prósent segjast vera andvíg aðild
+**í dag** en sá fjöldi var 39,8 prósent þegar könnunin var framkvæmd á
+svipuðum tíma **í fyrra**."* "í dag" sits physically *between* the two
+numbers (end of the first clause, right before "en"), so plain
+nearest-character-distance to "í dag" favors the *second*, later number
+(39,8 — the historical one) even though "í dag" grammatically modifies the
+first (46 — the current one). The fix ranks each candidate number by
+`(distance to nearest current marker) − (distance to nearest historical
+marker)` instead of nearest-current-marker alone — `_ESB_HISTORICAL_MARKER_RE`
+(`í fyrra`, `síðustu könnun`) makes the second term in that subtraction
+possible. Verified this correctly picks 46 (current), not 39.8 (historical).
+
+### A Deliberately Undocumented-Away Gap: Multi-Question Articles
+
+**When one article covers more than one EU-related question using the same
+hlynnt/andvígt wording, only the first-mentioned sentence per answer label
+survives — first-mention-per-answer-wins is the same rule, and same
+rationale, as the party parser's first-mention-per-party (see Prose
+Fallback above), extended to a shape the party parser never has to handle.**
+`visir-20262869821` genuinely asks about "aðild" (membership itself, 46%
+andvíg) and "aðildarviðræður" (resuming accession talks, 42% hlynnt) as two
+separate survey questions in the same article — both get recorded (since
+they use different labels, `Andvígt` vs `Hlynnt`, no collision there in
+this specific case), but if an article restated the *same* label for a
+*different* underlying question, the second occurrence would be silently
+dropped as "already recorded" even though it answers a genuinely different
+question. Not fixed — distinguishing "which of two ESB questions this
+sentence answers" needs semantic disambiguation past what a regex-based
+extractor can responsibly claim; documented as a known limitation rather
+than guessed, consistent with this skill's evidence-before-cue discipline
+throughout.
 
 ## Extraction Status by Source
 

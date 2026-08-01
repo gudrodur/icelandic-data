@@ -172,8 +172,19 @@ _ESB_ANSWER_STEMS = [
     # entirely via positional pairing instead).
     ("Óákveðin", r"hvorki\s+(?:vera\s+)?(?:fylgjandi|hlynnt\w*|andvíg\w*)\s+né\s+(?:vera\s+)?(?:fylgjandi|hlynnt\w*|andvíg\w*)"
                  r"|óákveðin\w*|veit\s+ekki|vildu\s+ekki\s+svara|ekki\s+vilja\s+svara"),
-    ("Já", r"\bjá\b"),
-    ("Nei", r"\bnei\b"),
+    # The referendum-vote phrasing carries no já/nei/hlynnt/andvígt word at
+    # all -- "greiða atkvæði með því að ..." / "greiddi atkvæði gegn því" /
+    # "sögðust kjósa með áframhaldandi aðildarviðræðum". Verified in two
+    # independent real articles (visir-20262902621 and visir-20262853438),
+    # where the skipped topline let demographic-subgroup numbers (age
+    # groups, women's numbers) be extracted as the article's result
+    # instead. Mapped to Já/Nei -- the ballot framing -- not Hlynnt/Andvígt,
+    # per the framing distinction kept deliberately below. ("myndu vilja
+    # hætta þeim" as a Nei-phrasing has only one example so far and stays
+    # unrecognized, per the 2-3-independent-examples rule; the paired
+    # number lands in the skip log.)
+    ("Já", r"\bjá\b|atkvæði\s+með\b|kjós\w*\s+með\b"),
+    ("Nei", r"\bnei\b|atkvæði\s+gegn\b"),
     ("Hlynnt", r"hlynnt\w*|fylgjandi"),
     ("Andvígt", r"andvíg\w*|mótfallin\w*"),
 ]
@@ -186,18 +197,71 @@ _ESB_ANSWER_RE = re.compile(
 _ESB_ANSWER_CANONICAL = {i: name for i, (name, _) in enumerate(_ESB_ANSWER_STEMS)}
 
 # Two real cross-question false-positive risks, both found reading actual
-# ESB articles (not hypothesized): (1) "varnarbandalag" (NATO, the
-# Atlantshafsbandalag) is regularly polled in the SAME article as EU
-# membership, using the identical hlynnt/andvíg vocabulary, about a
-# different membership question entirely -- verified, visir-20262869821 and
-# visir-20262838574 both ask about ESB and NATO membership in adjacent
-# sentences. (2) "upptöku evru" (adopting the euro) is a separate question
+# ESB articles (not hypothesized): (1) NATO is regularly polled in the SAME
+# article as EU membership, using the identical hlynnt/andvíg vocabulary,
+# about a different membership question entirely -- verified, visir-20262869821
+# and visir-20262838574 both ask about ESB and NATO membership in adjacent
+# sentences. NATO needs all its real names covered, not just
+# "varnarbandalag": visir-20262838574 phrases it as "Atlantshafsbandalaginu",
+# bare "bandalaginu", and "NATO" across different sentences, and with only
+# "varnarbandalag" excluded its NATO figures (78/17/9) were extracted as the
+# article's ESB answer. Bare "\bbandalag\w*" is safe inside the ESB
+# extractor because the EU is always "samband" (Evrópusambandið) in
+# Icelandic, never "bandalag" -- and \b does NOT make it subsume the
+# compound forms (no word boundary mid-compound), so all four alternatives
+# are needed. (2) "upptöku evru" (adopting the euro) is a separate question
 # some of the same commissioned polls ask alongside EU membership itself --
 # verified, visir-20262914497's SA-members survey reports both, and without
 # this exclusion the euro figure was silently recorded as if it were the
 # membership figure (the article's only other "Hlynnt" mention, so nothing
 # else would have caught it).
-_ESB_EXCLUDE_RE = re.compile(r"varnarbandalag\w*|upptöku\s+evru|evru\s+sem\s+gjaldmiðli", re.IGNORECASE)
+_ESB_EXCLUDE_RE = re.compile(
+    r"varnarbandalag\w*|Atlantshafsbandalag\w*|\bbandalag\w*|\bNATO\b"
+    r"|upptöku\s+evru|evru\s+sem\s+gjaldmiðli",
+    re.IGNORECASE,
+)
+
+# Demographic-subgroup sentences pair with the same answer vocabulary as a
+# topline but describe a subset of respondents -- verified in two
+# independent real articles: visir-20262853438 ("39 prósent karla eru
+# andvígir henni en 52 prósent hlynntir", "22 prósent andvígar og 62
+# prósent kvenna hlynntar" -- the women's numbers were extracted as the
+# article's topline) and visir-20262902621 ("63 prósent þeirra [18-29 ára]
+# myndu segja já ... 58 prósent þeirra sem eru á aldrinum 30 til 39 ára
+# myndu segja nei", plus residence and education breakdowns -- the age-group
+# numbers were extracted as the topline). Same false-attribution shape as
+# _NON_SUPPORT_TOPIC_RE's kjósend-/fylgismann- guard, extended to
+# demographic axes: gender, age, residence, education -- plus one political
+# axis, government-supporters ("83 prósent þeirra sem eru hlynntir
+# ríkisstjórninni eru hlynntir atkvæðagreiðslunni", visir-20262853438 --
+# extracted as the topline the moment the women's numbers were guarded;
+# the same subgroup framing appears in visir-20262902621). Kept ESB-local
+# (not added to the shared _NON_SUPPORT_TOPIC_RE) because that's where the
+# evidence is -- party articles' demographic breakdowns haven't been
+# observed producing a wrong topline yet. NOTE deliberately absent:
+# "þeirra sem taka afstöðu" is NOT a respondent subgroup -- it's the
+# standard decided-respondents basis every real topline uses.
+_ESB_SUBGROUP_RE = re.compile(
+    r"\bkarl(?:a|ar)\b|\bkvenna\b|\bkonur\b"
+    r"|á\s+aldrinum|aldursflokk\w*|aldurshóp\w*|ára\s+og\s+eldri|\d+\s+til\s+\d+\s+ára"
+    r"|landsbyggð\w*|höfuðborgarsvæð\w*"
+    r"|menntun\w*|háskólamennt\w*|grunnskóla\w*|framhaldsskóla\w*"
+    r"|ríkisstjórn\w*",
+    re.IGNORECASE,
+)
+
+# An answer term directly preceded by a SINGLE intensity qualifier is a
+# scale component, not the topline total -- verified in two independent
+# real articles: visir-20262853308 ("þeim sem voru mjög fylgjandi ... í tíu
+# prósent nú" -- the 10% mjög-fylgjandi component was recorded as Hlynnt,
+# the article's actual hlynnt total is ~25%) and visir-20262853438 ("33
+# prósent þátttakenda alfarið hlynnt atkvæðagreiðslunni, tólf prósent mjög
+# hlynnt, ..." -- the 33% alfarið component recorded as Hlynnt, actual
+# total 58%). The fixed-width "eða " lookbehind keeps the UNION phrasing
+# extractable: "78% alfarið, mjög eða frekar hlynntir" (visir-20262838574's
+# NATO paragraph) states the TOTAL as a qualifier union, and there the
+# qualifier adjacent to the answer term is always preceded by "eða ".
+_ESB_COMPONENT_QUALIFIER_RE = re.compile(r"(?<!eða )\b(?:alfarið|mjög|frekar)\s+$", re.IGNORECASE)
 
 # "nú"/"í dag" (now/today) vs. "í fyrra" (last year) mark which of two
 # numbers in one sentence is the current poll figure vs. a year-ago
@@ -626,6 +690,9 @@ def extract_esb_prose_figures(paragraphs: list[str]) -> tuple[list[dict], list[s
             if _ESB_EXCLUDE_RE.search(sentence):
                 skipped.append(f"[off-topic — NATO or euro-adoption question, not EU membership] {sentence}")
                 continue
+            if _ESB_SUBGROUP_RE.search(sentence):
+                skipped.append(f"[respondent subgroup (gender/age/residence/education/govt-support), not a topline] {sentence}")
+                continue
 
             answer_matches = list(_ESB_ANSWER_RE.finditer(sentence))
             if not answer_matches:
@@ -703,6 +770,12 @@ def extract_esb_prose_figures(paragraphs: list[str]) -> tuple[list[dict], list[s
             for pm, am in pairs:
                 idx = next(i for i, g in am.groupdict().items() if g)
                 answer = _ESB_ANSWER_CANONICAL[int(idx[1:])]
+
+                if _ESB_COMPONENT_QUALIFIER_RE.search(sentence[: am.start()]):
+                    skipped.append(
+                        f"[intensity-qualified component (alfarið/mjög/frekar {answer}), not the topline total] {sentence}"
+                    )
+                    continue
 
                 if answer in seen_answers:
                     skipped.append(f"[{answer} already recorded, later mention ignored] {sentence}")

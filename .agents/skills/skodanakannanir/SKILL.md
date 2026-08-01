@@ -747,7 +747,15 @@ into `Hlynnt`/`Andvígt` — they answer the literal referendum-ballot framing
 ("myndir þú segja já/nei í ágúst") rather than the general support/oppose
 framing, and Icelandic polling coverage reports both framings from the same
 underlying poll without treating them as interchangeable; collapsing them
-would blur a real methodological distinction. `extract_esb_prose_figures()`
+would blur a real methodological distinction. The ballot framing also gets
+phrased with **no já/nei/hlynnt word at all** — "greiða atkvæði **með** því
+að …" / "greiddi atkvæði **gegn** því" / "sögðust **kjósa með**
+áframhaldandi aðildarviðræðum" — verified in two independent articles
+(`visir-20262902621`, `visir-20262853438`) where the skipped topline let
+demographic-subgroup numbers (age groups, women's numbers) be extracted as
+the article's result instead; `atkvæði með`/`kjós\w* með` → `Já` and
+`atkvæði gegn` → `Nei`. ("myndu vilja hætta þeim" as a Nei-phrasing has one
+example so far and stays unrecognized — its number lands in the skip log.) `extract_esb_prose_figures()`
 is a parallel function to `extract_prose_poll_figures()`, not a branch of
 it — an ESB answer term is almost always named in the same sentence as its
 percentage (no need for the party parser's cross-sentence `current_party`
@@ -782,18 +790,51 @@ visir-20262869821 "Fleiri andvígir aðild nú en í fyrra"
   → Andvígt: 46.0, Hlynnt: 42.0
 ```
 
+Four more verified in the 2026-08-01 sweep (post-guard expected outputs —
+all five above re-verified unchanged at the same time, and the party
+regression article visir-20262904348 still yields its 6 documented rows):
+
+```
+visir-20262902621 "Rétt rúmur helmingur myndi segja já í ágúst" (Gallup)
+  → Já: 52.0, Nei: 48.0        (was: age-group numbers 63/58)
+
+visir-20262853438 "Þriðjungur andvígur atkvæðagreiðslunni" (Gallup)
+  → Já: 52.0                    (was: women's numbers 62/22; the
+                                 referendum-APPROVAL totals 58/30/12 are
+                                 word-number components, not extractable)
+
+visir-20262853308 "Iðnaðurinn forherðist í andstöðu gegn ESB" (SI members)
+  → Andvígt: 57                 (was: + bogus Hlynnt 10, the mjög-fylgjandi
+                                 component; the ~25 hlynnt total is never
+                                 stated as a digit percent)
+
+visir-20262838574 "Þjóðin klofin gagnvart ESB..." (Gallup, ESB + NATO)
+  → Hlynnt: 42.0 ✓ + two documented wrong residual rows (Óákveðin 20,
+    Andvígt 24) — see "Two More Guards" above; read this one by hand
+```
+
 ### Three Real False-Positive Risks, Found Reading Actual Articles
 
 Not hypothesized — each caught by tracing a real article's extraction by
 hand before trusting it, the same discipline as every other guard in this
 file:
 
-1. **NATO ("varnarbandalag") is polled in the same article as EU
-   membership, with the identical hlynnt/andvíg vocabulary.**
-   `visir-20262869821` and `visir-20262838574` both ask about ESB and NATO
-   membership in adjacent sentences ("72 prósent aðspurðra eru jákvæð
-   gagnvart aðild þjóðarinnar að **varnarbandalaginu**"). `_ESB_EXCLUDE_RE`
-   drops any sentence containing `varnarbandalag\w*` outright.
+1. **NATO is polled in the same article as EU membership, with the
+   identical hlynnt/andvíg vocabulary — and it needs ALL its real names
+   excluded, not just "varnarbandalag".** `visir-20262869821` and
+   `visir-20262838574` both ask about ESB and NATO membership in adjacent
+   sentences ("72 prósent aðspurðra eru jákvæð gagnvart aðild þjóðarinnar
+   að **varnarbandalaginu**"). Verified 2026-08-01: `visir-20262838574`
+   names NATO as "Atlantshafsbandalaginu", bare "bandalaginu", and "NATO"
+   across different sentences — with only `varnarbandalag\w*` excluded, its
+   NATO figures (hlynnt 78 / hvorki né 17 / andvígt 9) were extracted as
+   the article's ESB answer while the real ESB topline (42/42) was
+   partially shadowed. `_ESB_EXCLUDE_RE` now drops sentences containing
+   `varnarbandalag\w*|Atlantshafsbandalag\w*|\bbandalag\w*|\bNATO\b`. Bare
+   `\bbandalag\w*` is safe *inside the ESB extractor* because the EU is
+   always "samband" (Evrópusambandið) in Icelandic, never "bandalag" — and
+   `\b` does not make it subsume the compounds (no word boundary
+   mid-compound), so all four alternatives are needed.
 2. **Euro adoption ("upptöku evru") is a separate question some of the same
    commissioned polls ask alongside EU membership itself.**
    `visir-20262914497`'s SA-members survey reports both ("Fleiri eru þó
@@ -815,6 +856,51 @@ file:
    `veit ekki` and `ekki vilja svara`/`vildu ekki svara` as the same answer
    sidesteps the gap measurement entirely via positional pairing instead of
    proximity.
+
+### Two More Guards from the 2026-08-01 Full-Year Sweep
+
+Hand-verifying **every** 2026 ESB article against its own prose (11 polls,
+building the ESB-poll table) surfaced two more false-positive classes, each
+with two independent real examples before being fixed — plus a
+whack-a-mole lesson: fixing one guard exposes the next-nearest wrong
+sentence, so verify the *output*, not just the fixed case.
+
+1. **Respondent-subgroup sentences** (`_ESB_SUBGROUP_RE`): the same
+   answer vocabulary scoped to a subset of respondents — gender ("39
+   prósent **karla** eru andvígir … 62 prósent **kvenna** hlynntar",
+   `visir-20262853438`, the women's numbers became the extracted topline),
+   age ("63 prósent þeirra [18-29 **ára**] myndu segja já … 58 prósent
+   þeirra sem eru **á aldrinum** 30 til 39 ára myndu segja nei",
+   `visir-20262902621`, extracted as the topline), residence
+   (höfuðborgarsvæði/landsbyggð), education (háskóla-/grunnskóla-/
+   framhaldsskólapróf) — and one political axis, government-supporters
+   ("83 prósent þeirra sem eru hlynntir **ríkisstjórninni** eru hlynntir
+   atkvæðagreiðslunni", same article — it became the topline the moment
+   the women's numbers were guarded). Same false-attribution shape as the
+   kjósend-/fylgismann- guard, kept ESB-local because that's where the
+   evidence is. "Þeirra sem taka afstöðu" is deliberately NOT in the
+   guard — that's the decided-respondents basis every real topline uses.
+2. **Intensity-scale components** (`_ESB_COMPONENT_QUALIFIER_RE`): an
+   answer term directly preceded by a single `alfarið`/`mjög`/`frekar` is
+   a scale component, not the total — "þeim sem voru **mjög fylgjandi** …
+   í tíu prósent nú" (`visir-20262853308`; recorded as Hlynnt 10, the
+   real hlynnt total is ~25) and "33 prósent þátttakenda **alfarið
+   hlynnt** atkvæðagreiðslunni, tólf prósent mjög hlynnt, …"
+   (`visir-20262853438`; recorded as Hlynnt 33, real total 58). The
+   fixed-width `(?<!eða )` lookbehind keeps the *union* phrasing
+   extractable — "78% **alfarið, mjög eða frekar** hlynntir" states the
+   TOTAL, and there the qualifier adjacent to the answer term always
+   follows "eða ".
+
+**Two residuals found the same sweep, deliberately left unfixed (one
+example each):** in `visir-20262838574`, a year-ago figure in a
+single-number sentence ("… nú en **í fyrra** þegar 20% sögðust hvorki
+hlynntir né andvígir" → bogus `Óákveðin: 20`; the single-percent branch
+doesn't consult the current/historical markers) and a genuinely ambiguous
+comparison ("Næstum nákvæmlega jafnmargir segjast vera hlynntir ESB aðild
+og þeir sem segjast andvígir, **eða 24%**" → `Andvígt: 24` while the
+lead paragraph says 42/42). That article auto-extracts `Hlynnt: 42`
+correctly plus those two wrong rows — read it by hand.
 
 ### The "nú"/"í dag" vs. "í fyrra" Trap
 

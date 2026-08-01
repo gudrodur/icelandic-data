@@ -1,6 +1,6 @@
 ---
 name: skodanakannanir
-description: RÚV + Vísir + Heimildin opinion-poll aggregators (skoðanakannanir) — party support (Alþingi + Reykjavík) and EU-membership (ESB) polling across pollsters.
+description: RÚV + Vísir + Heimildin opinion-poll aggregators (skoðanakannanir) — all-pollster party support (Alþingi + Reykjavík) and ESB polling; try the maskina skill first.
 ---
 
 # Skoðanakannanir — RÚV + Vísir + Heimildin Opinion-Poll Aggregators
@@ -12,6 +12,17 @@ flokka" questions, at either national (Alþingi) or Reykjavík city
 (borgarstjórn) level — and, via `--topic esb`, for EU-membership
 support/oppose polling ahead of the 2026-08-29 referendum
 (þjóðaratkvæðagreiðsla); see "Topic System" below.
+
+**Check the [`maskina`](../maskina/SKILL.md) skill first.** This skill is the
+heavy tool: it extracts numbers out of news articles (Playwright for RÚV,
+prose/chart parsing, false-positive filtering). Maskína's own skill reads
+structured data straight from the pollster — the Tableau fylgi dashboard and
+the WordPress article API (fylgi, Borgarviti, ESB/aðild, trust series) — with
+no browser and no article scraping. If the question is answerable from
+Maskína's own data, answer it there. Reach for this skill for what maskina
+cannot give: the other pollsters (Gallup, Prósent, Félagsvísindastofnun),
+cross-pollster comparison, Reykjavík polling breadth, or polls that only ever
+appeared as one-off news stories.
 
 **Use Vísir/Heimildin for discovery, RÚV for numbers.** Verified: RÚV's tag
 page holds only ~51 recent items with no working pagination (see Caveat 7),
@@ -25,12 +36,6 @@ still discovery-only. Vísir is actually the *simpler* of the two to fetch:
 its article bodies are server-rendered, so `fetch_visir_article()` is plain
 `httpx`, no Playwright, no browser at all (RÚV needs one — see the RÚV
 `fetch` section).
-
-**Related but different scope:** the [`maskina`](../maskina/SKILL.md) skill
-covers Maskína's own structured Tableau dashboard directly — one pollster,
-always current. This skill covers the RÚV-reported layer across *all*
-pollsters (Maskína, Prósent, Gallup, Félagsvísindastofnun), including polls
-those firms only ever published as one-off RÚV stories.
 
 ## Two-Stage Pipeline
 

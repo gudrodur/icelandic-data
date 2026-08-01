@@ -28,10 +28,79 @@ curl 'https://maskina.is/wp-json/wp/v2/posts/6412?_fields=id,title,date,link,con
 
 **Content format:** HTML in `content.rendered`. Requires HTML stripping. Poll data is embedded as prose text — "Samfylkingin stendur nú í um 25% fylgi".
 
-**Key search terms:**
-- `fylgi` — party support (monthly polls)
-- `borgarviti` — Reykjavík politics
-- `stofnanaviti` — institutional trust
+**Search is a full-text index, not a fixed set of topics.** `/wp/v2/categories`
+returns only `Fréttir` (339 posts) and `Uncategorized @is` (32) — there is no
+real taxonomy to browse. `/wp/v2/tags` is empty. The `?search=` parameter is
+the only practical way to find topical content, and it matches title + body
+text freely — any word Maskína has ever polled about works, not just the
+terms below.
+
+**Known recurring, branded series** (repeated release after release — worth
+building a systematic fetcher around, the way `fylgi` already is):
+
+| Series | Search term(s) | Example title |
+|---|---|---|
+| Fylgi flokka (national party support) | `fylgi` | "Ný fylgismæling fyrir flokka á Alþingi" |
+| Borgarviti (Reykjavík city politics) | `borgarviti` | "Borgarviti Maskínu: vaxandi óánægja með störf borgarstjóra" |
+| Stofnanaviti (institutional trust) | `stofnanaviti` | "Stofnanaviti Maskínu er kominn út!" |
+| ESB/aðild (EU membership) | `ESB`, `aðild`, `Evrópusambandið` | "53% hlynnt áframhaldandi aðildarviðræðum við ESB" (2026-01-12) |
+| Traust til ráðherra/ríkisstjórnar (government/minister trust & approval) | `ríkisstjórnin`, `ráðherra` | "Ný traust mæling allra ráðherra" |
+| Meðmæling Maskínu (annual "recommended companies") | `Meðmæling` | "12 fyrirtæki hljóta Meðmælingu Maskínu 2023" |
+| Kryddsíld (year-end TV special poll) | `Kryddsíld` | "Kannanir úr Kryddsíld 2023" |
+| Áramótaskaupið (satisfaction with the New Year's Eve comedy show) | `Áramótaskaupið` | "Gríðarleg ánægja með Áramótaskaupið" |
+| Eurovision | `Eurovision` | "13% horfðu á Eurovision í ár" |
+
+All nine confirmed live (2026-08-01) via `curl .../wp/v2/posts?search=<term>`
+— each returns real, on-topic results, not just a single title-match fluke.
+
+Beyond these, the archive is 371 posts deep (`x-wp-total` response header)
+and covers plenty of one-off newsworthy topics that never repeat as a named
+series — laxeldi (fish farming), veggjöld (road tolls), leiguþak (rent
+caps), flóttafólk (refugees), Borgarlína, hvalveiðar (whaling), and more.
+These are real and searchable, just not catalogued here individually — if
+asked about a topic not in the table above, search for it directly rather
+than assuming Maskína hasn't polled on it.
+
+**Worked example — ESB** (2026-01-12,
+`https://maskina.is/53-hlynnt-aframhaldandi-adildarvidraedum-vid-esb/`): a
+poll originally commissioned for Sýn's Kryddsíld broadcast, published with
+Sýn's permission. Prose carries one clean extractable figure — "um 53%
+þeirra sem taka afstöðu í könnuninni eru hlynnt áframhaldandi
+aðildarviðræðum sem eru um 2 prósentustigum meira en þegar spurningin var
+borin upp ári áður" — followed by full methodology (Þjóðgátt panel,
+n=1,765, weighted by Þjóðskrá, fielded 3.-15. October 2025). Same shape as
+party-support articles: one prose sentence carries the headline number,
+methodology follows in the paragraphs after.
+
+The article also embeds a Tableau viz (`<div id="viz1768228030864">`)
+distinct from the `FylgiFlokka-heimasa` workbook documented below —
+**unconfirmed lead, not yet investigated.** Could be a second structured
+dashboard specifically for the ESB question, or just a one-off chart. Worth
+checking with the same VizQL approach below before assuming it doesn't
+exist.
+
+**Caveat: broad search terms return false positives — verify each hit,
+don't trust title-matching alone.** Pulling the 3 most recent
+`ESB`/`aðild`/`Evrópusambandið` hits live (2026-08-01) surfaced:
+
+1. 2026-01-12 — the ESB-referendum poll above. Relevant.
+2. **2022-04-04 — "Maskína gerir reglulega kannanir á Íslandi fyrir
+   Framkvæmdastjórn Evrópusambandsins"** — matched only because
+   "Evrópusambandið"/"Evrópusvæðinu" appear often in the text. It's an EU
+   Commission survey of European SMEs' green-market practices (89% of EU
+   SMEs, 37% of Icelandic ones, have taken sustainability steps) — **not**
+   an Icelandic membership-opinion poll at all. A naive `--topic esb`
+   fetcher would misparse this as a referendum-support article and either
+   extract garbage or (more likely, since it has no hlynnt/andvígt framing)
+   silently produce nothing — either way, don't assume a search hit is
+   on-topic without reading it.
+3. 2021-02-06 — inngöngu-stuðningur (membership support, not just
+   "continue negotiations"): ~30% hlynnt, ~42% andvíg, plus a
+   party-affiliation breakdown (Viðreisn 76.9% hlynnt, Miðflokkur 75.8%
+   andvígt, etc.) — a genuinely different question from "aðildarviðræður"
+   in the 2026 article. Worth keeping the two framings (support continuing
+   *negotiations* vs. support *membership* itself) distinct in any
+   extraction logic — they are not interchangeable numbers.
 
 ### 2. Tableau Public Dashboard (structured data)
 

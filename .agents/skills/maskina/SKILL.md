@@ -81,10 +81,19 @@ methodology follows in the paragraphs after.
 
 The article also embeds a Tableau viz (`<div id="viz1768228030864">`)
 distinct from the `FylgiFlokka-heimasa` workbook documented below —
-**unconfirmed lead, not yet investigated.** Could be a second structured
-dashboard specifically for the ESB question, or just a one-off chart. Worth
-checking with the same VizQL approach below before assuming it doesn't
-exist.
+**confirmed live 2026-08-01**: workbook `12_01_2026-ESB_virur`, view
+`Frtt-ESB`, worksheet `helstu-ESB (2)`, readable with the exact VizQL flow
+below (response ~100KB, 2 chunks). It carries the referendum question
+("Ef haldin verður atkvæðagreiðsla um áframhaldandi aðildarviðræður við
+ESB, myndir þú greiða atkvæði með eða á móti?") across two waves
+(`2024-12-01`, `2025-12-01`): Með 50.9% → 53.0%, Á móti 49.1% → 47.0%,
+plus weighted respondent counts — matching the article's "um 2
+prósentustigum meira en ári áður" exactly. Two generalizable lessons:
+the dated workbook name implies **one-off per-article workbooks** (future
+ESB releases will likely ship a new workbook, not update this one), and
+the workbook/view names are **discoverable from the article HTML** — grep
+for the static-image URL, shaped
+`public.tableau.com/static/images/12/12_01_2026-ESB_virur/Frtt-ESB/1.png`.
 
 **Caveat: broad search terms return false positives — verify each hit,
 don't trust title-matching alone.** Pulling the 3 most recent
@@ -406,6 +415,12 @@ Flokkur fólksins' -9.7pt collapse since the 2024 election (13.8% → 4.1%)
 matches the well-documented real-world drop in their support — a useful
 sanity anchor when verifying future extractions.
 
+Re-verified 2026-08-01 with the code block above run verbatim against the
+following month's poll (published 2026-07-22, "Sjálfstæðisflokkurinn á
+flugi"): Sjálfstæðisflokkurinn leads at 25.0%, all nine parties extract
+once each, sum exactly 100.0% — stride detection handled the new
+measurement without changes.
+
 ## Data Caveats
 
 1. **VizQL API is undocumented** — Tableau could change the response format without notice. The WordPress API is a stable fallback for prose data.
@@ -432,6 +447,6 @@ sanity anchor when verifying future extractions.
 ## Alternative Sources
 
 - **maskina.is articles** — WordPress REST API, prose format, full article text
-- **RÚV/Vísir** — Icelandic media sometimes republish poll highlights
-- **Gallup (gallup.is)** — Competing polling firm, separate data source (not yet explored)
-- **Prósent (prosent.is)** — Former MMR, another polling firm (not yet explored)
+- **RÚV/Vísir/Heimildin** — media coverage of polls from all pollsters; the `skodanakannanir` skill extracts numbers from those articles
+- **Gallup (gallup.is)** — Competing polling firm; no direct integration, but its polls reach the `skodanakannanir` pipeline via news coverage
+- **Prósent (prosent.is)** — Former MMR, another polling firm; same — reachable via `skodanakannanir` news coverage

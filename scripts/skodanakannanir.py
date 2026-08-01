@@ -973,60 +973,57 @@ def cmd_list(args):
         print(f"  {line}")
 
 
-async def _scrape_article(url: str) -> dict:
-    from playwright.async_api import async_playwright
+async def _scrape_article(page, url: str) -> dict:
+    """Scrape one article's poll figures from an already-open Playwright
+    page. Browser/page lifecycle is the caller's job (see _fetch_targets) —
+    launching a fresh Chromium per article cost ~1-2s of pure relaunch
+    overhead on top of the page load itself, unnecessary for a batch."""
+    await page.goto(url, wait_until="networkidle", timeout=60_000)
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=60_000)
+    # Chart bars: SVG <path aria-label="Samfylking, 22.2%."> per party
+    bars = await page.eval_on_selector_all(
+        'path[aria-label*="%"]',
+        "els => els.map(e => e.getAttribute('aria-label'))",
+    )
+    parties = []
+    source = "chart"
+    skipped: list[str] = []
+    for label in bars:
+        m = re.match(r"^(.+?),\s*([\d.,]+)\s*%\.?$", label.strip())
+        if not m:
+            continue
+        party, recognized = _canonicalize_chart_party(m.group(1).strip())
+        if party is None:
+            continue  # confirmed non-party catch-all label ("Önnur framboð")
+        if not recognized:
+            skipped.append(f"[unrecognized chart party label, kept as-is] {party!r}")
+        parties.append({"party": party, "pct": float(m.group(2).replace(",", "."))})
 
-        # Chart bars: SVG <path aria-label="Samfylking, 22.2%."> per party
-        bars = await page.eval_on_selector_all(
-            'path[aria-label*="%"]',
-            "els => els.map(e => e.getAttribute('aria-label'))",
-        )
-        parties = []
-        source = "chart"
-        skipped: list[str] = []
-        for label in bars:
-            m = re.match(r"^(.+?),\s*([\d.,]+)\s*%\.?$", label.strip())
-            if not m:
-                continue
-            party, recognized = _canonicalize_chart_party(m.group(1).strip())
-            if party is None:
-                continue  # confirmed non-party catch-all label ("Önnur framboð")
-            if not recognized:
-                skipped.append(f"[unrecognized chart party label, kept as-is] {party!r}")
-            parties.append({"party": party, "pct": float(m.group(2).replace(",", "."))})
+    # Scoped to .article-body, not all of <main>: the page footer/sidebar
+    # carries unrelated "most read" and nav content that could
+    # coincidentally contain party names. Fetched unconditionally, not
+    # just on the prose fallback path — methodology fields (sample
+    # size, response rate) live in ordinary prose even on chart-sourced
+    # articles, which otherwise never touch the article body text.
+    body_text = await page.eval_on_selector(".article-body", "el => el.innerText")
+    paragraphs = [p for p in body_text.split("\n") if p.strip()]
 
-        # Scoped to .article-body, not all of <main>: the page footer/sidebar
-        # carries unrelated "most read" and nav content that could
-        # coincidentally contain party names. Fetched unconditionally, not
-        # just on the prose fallback path — methodology fields (sample
-        # size, response rate) live in ordinary prose even on chart-sourced
-        # articles, which otherwise never touch the article body text.
-        body_text = await page.eval_on_selector(".article-body", "el => el.innerText")
-        paragraphs = [p for p in body_text.split("\n") if p.strip()]
+    if not parties:
+        # No chart on this article — fall back to prose. See
+        # extract_prose_poll_figures() for why verb mood, not proximity,
+        # decides which numbers are current poll figures — the
+        # first-mention-wins dedup there (not the .article-body scoping
+        # above) is what actually keeps embedded "related article"
+        # teaser excerpts (rendered inline in .article-body, same as
+        # real paragraphs) from overwriting this article's own topline
+        # numbers.
+        prose_results, skipped = extract_prose_poll_figures(paragraphs)
+        for r in prose_results:
+            parties.append({"party": r["party"], "pct": r["pct"], "approx": r["approx"]})
+        source = "prose" if prose_results else "none"
 
-        if not parties:
-            # No chart on this article — fall back to prose. See
-            # extract_prose_poll_figures() for why verb mood, not proximity,
-            # decides which numbers are current poll figures — the
-            # first-mention-wins dedup there (not the .article-body scoping
-            # above) is what actually keeps embedded "related article"
-            # teaser excerpts (rendered inline in .article-body, same as
-            # real paragraphs) from overwriting this article's own topline
-            # numbers.
-            prose_results, skipped = extract_prose_poll_figures(paragraphs)
-            for r in prose_results:
-                parties.append({"party": r["party"], "pct": r["pct"], "approx": r["approx"]})
-            source = "prose" if prose_results else "none"
-
-        methodology = extract_methodology(paragraphs)
-
-        title = await page.title()
-        await browser.close()
+    methodology = extract_methodology(paragraphs)
+    title = await page.title()
 
     return {
         "url": url,
@@ -1036,6 +1033,55 @@ async def _scrape_article(url: str) -> dict:
         "prose_skipped": skipped,
         "methodology": methodology,
     }
+
+
+async def _fetch_targets(targets: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
+    """Fetch every target in order, printing progress as each completes.
+
+    One Chromium instance is launched lazily on the first RÚV article and
+    reused (one page per article) for the rest of the batch, instead of a
+    fresh browser per article — see _scrape_article's docstring. Vísir
+    articles are plain httpx (fetch_visir_article) and never touch the
+    browser at all.
+
+    A single article's failure must not lose every already-fetched article
+    in this batch (verified: a RÚV Playwright page.goto TimeoutError, 9
+    articles into a real --all --limit 10 run) — continue past it.
+    """
+    from playwright.async_api import async_playwright
+
+    results: list[tuple[dict, dict]] = []
+    failed: list[dict] = []
+    browser = None
+    try:
+        async with async_playwright() as p:
+            for meta in targets:
+                print(f"  fetching [{meta['id']}] {meta['title']} ...")
+                try:
+                    if meta["source"] == "visir":
+                        result = fetch_visir_article(meta["url"])
+                    else:
+                        if browser is None:
+                            browser = await p.chromium.launch(headless=True)
+                        page = await browser.new_page()
+                        try:
+                            result = await _scrape_article(page, meta["url"])
+                        finally:
+                            await page.close()
+                except Exception as exc:
+                    print(f"    FAILED: {type(exc).__name__}: {exc}")
+                    failed.append({"id": meta["id"], "url": meta["url"], "error": f"{type(exc).__name__}: {exc}"})
+                    continue
+                if not result["parties"]:
+                    print(f"    no chart and no prose figures extracted ({len(result['prose_skipped'])} sentences skipped)")
+                else:
+                    print(f"    {len(result['parties'])} parties via {result['source']}"
+                          + (f", {len(result['prose_skipped'])} sentences skipped" if result["source"] == "prose" else ""))
+                results.append((meta, result))
+    finally:
+        if browser is not None:
+            await browser.close()
+    return results, failed
 
 
 def cmd_fetch(args):
@@ -1069,36 +1115,12 @@ def cmd_fetch(args):
         print("Provide an article id or --all", file=sys.stderr)
         sys.exit(1)
 
+    fetched, failed = asyncio.run(_fetch_targets(targets))
+
     rows = []
-    failed = []
-    for meta in targets:
-        print(f"  fetching [{meta['id']}] {meta['title']} ...")
-        # Vísir is server-rendered (plain httpx, see fetch_visir_article);
-        # RÚV needs a browser (client-side rendered, see _scrape_article).
-        # One article's failure (verified: a RÚV Playwright page.goto
-        # TimeoutError, on a slow/unresponsive page 9 articles into a real
-        # --all --limit 10 run) must not lose every already-fetched article
-        # in this batch — before this try/except, an uncaught exception here
-        # propagated straight out of cmd_fetch, skipping the CSV write
-        # entirely; the individual {id}.json raw files for already-processed
-        # articles survived (each is written inside this loop), but the
-        # aggregated CSV did not exist at all afterward. Continue past a
-        # single failure and still write whatever succeeded.
-        try:
-            result = (
-                fetch_visir_article(meta["url"])
-                if meta["source"] == "visir"
-                else asyncio.run(_scrape_article(meta["url"]))
-            )
-        except Exception as exc:
-            print(f"    FAILED: {type(exc).__name__}: {exc}")
-            failed.append({"id": meta["id"], "url": meta["url"], "error": f"{type(exc).__name__}: {exc}"})
-            continue
+    for meta, result in fetched:
         if not result["parties"]:
-            print(f"    no chart and no prose figures extracted ({len(result['prose_skipped'])} sentences skipped)")
             continue
-        print(f"    {len(result['parties'])} parties via {result['source']}"
-              + (f", {len(result['prose_skipped'])} sentences skipped" if result["source"] == "prose" else ""))
         methodology = result.get("methodology") or {}
         for p in result["parties"]:
             rows.append(

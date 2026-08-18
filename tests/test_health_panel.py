@@ -17,6 +17,8 @@ fails immediately.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pathlib
 import re
 
@@ -81,11 +83,18 @@ def test_sources_with_no_history_still_get_a_dot(tmp_path):
 
 
 def test_history_drives_the_colour(tmp_path):
+    # Dates relative to today, not the three days in July this was written on.
+    # render() only counts observations inside window_days (30), so a fixed
+    # fixture passes for a month and then silently starts reporting "unknown" —
+    # which is what it did from mid-August, unnoticed because ci.yml had not run
+    # since 2026-08-01.
+    today = datetime.now(timezone.utc).date()
     hist = tmp_path / "history.jsonl"
     hist.write_text(
         "\n".join(
-            f'{{"ts": "2026-07-{day:02d}T06:17:00+00:00", "source": "vedur", "status": "healthy"}}'
-            for day in (14, 15, 16)
+            f'{{"ts": "{(today - timedelta(days=n)).isoformat()}T06:17:00+00:00", '
+            f'"source": "vedur", "status": "healthy"}}'
+            for n in (1, 2, 3)
         ),
         encoding="utf-8",
     )

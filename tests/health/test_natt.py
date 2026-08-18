@@ -8,13 +8,30 @@ polygons behind `scripts/agricultural_land_map.py`).
 **This probe is expected to fail as of 2026-07-17** — that is the point, not a
 bug in the test. `LMI_vektor:vistgerd` has been withdrawn from gis.natt.is,
 gis.lmi.is and ogc.gis.is alike; all three answer
-`InvalidParameterValue: Feature type LMI_vektor:vistgerd unknown`. NÍ appear to
-have reorganised the habitat data into a new `vistgerdir:` workspace
-(`v_vg25v_fl_land`, `_fl_vatn`, `_fl_fjorur`), but those layers are *not* a
-drop-in replacement: they carry a different schema (`vg1`, `vg1_texti`, … — no
-`DN`/`htxt`) and orders of magnitude fewer polygons. Migrating natt.py needs a
-decision about which new layer maps to the old habitat codes, so the probe
-records the break rather than papering over it.
+`InvalidParameterValue: Feature type LMI_vektor:vistgerd unknown`.
+
+NÍ have reorganised the habitat data into a `vistgerdir:` workspace, and this
+docstring used to call those layers a non-drop-in replacement needing a mapping
+decision. Measured against the live WFS on 2026-08-18, that was too generous:
+there is nothing here to map to.
+
+    vistgerdir:v_vg25v_fl_land          360 features, vg3 ∈ {L12.1 … L12.4},
+                                        every one of them Hverasvæði
+    vistgerdir:v_vg25v_fl_vatn       54,093
+    vistgerdir:v_vg25v_fl_fjorur     19,519
+    ni:vistgerdir_punktar             7,984
+
+~82k features against the old layer's ~24M polygons. The schema is a `vg1…vg5`
+hierarchy where `vg3` carries the L-code, so `L14.2 Tún og akurlendi` should be
+`vg3='L14.2'` — and `resultType=hits` for that filter returns
+`numberMatched="0"`, as do `L14.1` and `L14.3`. The land layer simply does not
+carry the cultivated-land class.
+
+So `DN=95` has no successor on this endpoint, and neither `scripts/natt.py` nor
+`agricultural_land_map.py` can be migrated to it. The open question is not which
+new code to pick; it is where the full-resolution vistgerðakort is published now,
+if not on gis.natt.is. Tracked separately — the probe stays red on purpose, and
+guessing a layer here would quietly change what the agricultural-land map means.
 
 Payload discipline: the layer is ~24M polygons (the polygonised 5 m raster), so
 neither request here transfers geometry — capabilities proves the name,

@@ -1,7 +1,12 @@
 """Map of Iceland's agricultural land — habitat L14.2 *Tún og akurlendi*.
 
-Polygons come from Náttúrufræðistofnun (NÍ) ``LMI_vektor:vistgerd`` (the
-1:25.000 3rd-edition vector vistgerðir). Run scripts/natt.py first:
+Polygons come from Náttúrufræðistofnun's habitat map, Vistgerðakort 2024
+(1:25.000, 3. útgáfa), licensed CC BY 4.0. Until 2026-08 they were fetched from
+a WFS vector layer; that layer was withdrawn and the map is now published as a
+5 m raster, so ``scripts/natt.py`` extracts the class from the coverage and
+polygonises it. Same DN code, same class, finer grid.
+
+Run scripts/natt.py first:
 
     uv run python scripts/natt.py habitat --dn 95
     uv run python scripts/agricultural_land_map.py
@@ -89,7 +94,7 @@ def render_static(tun: gpd.GeoDataFrame, land: gpd.GeoDataFrame,
     )
     ax.set_title(
         f"{total_km2:,.0f} km²  ·  {n_patches:,} reitir  ·  "
-        f"{share:.2f}% af landi  ·  Heimild: Náttúrufræðistofnun (vistgerðir 1:25.000, 3. útg.)",
+        f"{share:.2f}% af landi  ·  Vistgerðakort 2024, Náttúrufræðistofnun (1:25.000, 3. útg.), CC BY 4.0",
         fontsize=10.5, color="#444", pad=8,
     )
 
@@ -123,14 +128,14 @@ HTML_TEMPLATE = """<!doctype html>
 </head><body>
 <div id="header">
   <h1>Tún og akurlendi á Íslandi — L14.2 vistgerð</h1>
-  <div id="meta">{n_patches} reitir · {area_km2} km² · {share}% af landi · Náttúrufræðistofnun, vistgerðir 1:25.000 (3. útg.)</div>
+  <div id="meta">{n_patches} reitir · {area_km2} km² · {share}% af landi · Vistgerðakort 2024, Náttúrufræðistofnun (1:25.000, 3. útg.), CC BY 4.0</div>
 </div>
 <div id="map"></div>
 <script>
 const fc = {geojson};
 const map = L.map('map', {{zoomSnap:0.25, preferCanvas:true}}).setView([64.9,-18.5],6.6);
 L.tileLayer('https://cartodb-basemaps-{{s}}.global.ssl.fastly.net/light_all/{{z}}/{{x}}/{{y}}.png', {{
-  attribution: '&copy; OSM &copy; CARTO · Vistgerðir: Náttúrufræðistofnun',
+  attribution: '&copy; OSM &copy; CARTO · Vistgerðakort 2024, Náttúrufræðistofnun, CC BY 4.0',
   maxZoom: 18
 }}).addTo(map);
 const layer = L.geoJSON(fc, {{

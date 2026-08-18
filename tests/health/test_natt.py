@@ -1,118 +1,96 @@
-"""Health probe — Náttúrufræðistofnun GeoServer WFS (gis.natt.is).
+"""Health probe — Náttúrufræðistofnun habitat map (vistgerðakort).
 
-Contract: the habitat-type layer `scripts/natt.py` LAYER points at still exists
-and still serves the `DN` / `htxt` attribute pair that every CQL filter in that
-script is built from (`DN=95` = L14.2 Tún og akurlendi, the cultivated-land
-polygons behind `scripts/agricultural_land_map.py`).
+Contract: the habitat class `scripts/natt.py` extracts still exists, is still
+served, and still carries the same numeric code — `DN=95` = L14.2 Tún og
+akurlendi, the cultivated-land class behind `scripts/agricultural_land_map.py`.
 
-**This probe is expected to fail as of 2026-07-17** — that is the point, not a
-bug in the test. `LMI_vektor:vistgerd` has been withdrawn from gis.natt.is,
-gis.lmi.is and ogc.gis.is alike; all three answer
-`InvalidParameterValue: Feature type LMI_vektor:vistgerd unknown`.
+**Rewritten 2026-08-18, from WFS to WCS.** This probe used to assert that the
+WFS feature type `LMI_vektor:vistgerd` was present, and it had been failing
+since 2026-07-17 because that layer was withdrawn. The conclusion drawn at the
+time — that the habitat data had been reorganised into `vistgerdir:v_vg25v_*`
+and lost the `DN` codes — was wrong in a way worth recording, because the
+mistake was in the question, not the answer.
 
-NÍ have reorganised the habitat data into a `vistgerdir:` workspace, and this
-docstring used to call those layers a non-drop-in replacement needing a mapping
-decision. Measured against the live WFS on 2026-08-18, that was too generous:
-there is nothing here to map to.
+The map was never withdrawn. It is published as a **raster**, and a raster is
+not a feature type, so it can never appear in WFS capabilities no matter how
+carefully you read them. The `v_vg25v_*` vector layers that look like a
+replacement are a separate small product (freshwater and shores); the land
+habitats live in the coverage:
 
-    vistgerdir:v_vg25v_fl_land          360 features, vg3 ∈ {L12.1 … L12.4},
-                                        every one of them Hverasvæði
-    vistgerdir:v_vg25v_fl_vatn       54,093
-    vistgerdir:v_vg25v_fl_fjorur     19,519
-    ni:vistgerdir_punktar             7,984
+    vistgerdir__ni_vg25r_3utg_lzw    5 m, EPSG:3057, 102,928 x 72,798
 
-~82k features against the old layer's ~24M polygons. The schema is a `vg1…vg5`
-hierarchy where `vg3` carries the L-code, so `L14.2 Tún og akurlendi` should be
-`vg3='L14.2'` — and `resultType=hits` for that filter returns
-`numberMatched="0"`, as do `L14.1` and `L14.3`. The land layer simply does not
-carry the cultivated-land class.
+Three cheap assertions, none of which transfers the country:
 
-So `DN=95` has no successor on this endpoint, and neither `scripts/natt.py` nor
-`agricultural_land_map.py` can be migrated to it. The open question is not which
-new code to pick; it is where the full-resolution vistgerðakort is published now,
-if not on gis.natt.is. Tracked separately — the probe stays red on purpose, and
-guessing a layer here would quietly change what the agricultural-land map means.
+  1. DescribeCoverage — the coverage exists under that id
+  2. GetStyles — DN 95 still means L14.2, read from the publisher's own SLD
+     rather than from a table copied into this repo
+  3. GetCoverage on one 1 km tile — it actually serves pixels
 
-Payload discipline: the layer is ~24M polygons (the polygonised 5 m raster), so
-neither request here transfers geometry — capabilities proves the name,
-`resultType=hits` proves non-emptiness, and the attribute check uses
-`propertyName=DN,htxt` with `count=5`.
+Licence: CC BY 4.0, Náttúrufræðistofnun.
 """
 from __future__ import annotations
 
-import re
+import xml.etree.ElementTree as ET
 
-from scripts.natt import LAYER, WFS
+from scripts.natt import COVERAGE, CRS, STYLE_LAYER, WCS, WMS
+
+CULTIVATED_DN = 95
+CULTIVATED_CLASS = "L14.2"
 
 
-def test_capabilities_lists_the_habitat_layer(http):
-    """A rename is the documented failure mode — catch it by name."""
-    r = http.get(
-        WFS,
-        params={"service": "WFS", "version": "2.0.0", "request": "GetCapabilities"},
+def test_coverage_is_published(http):
+    """A withdrawal or rename is the documented failure mode — catch it by id."""
+    r = http.get(WCS, params={
+        "service": "WCS", "version": "2.0.1", "request": "DescribeCoverage",
+        "coverageId": COVERAGE,
+    })
+    assert r.status_code == 200, f"{r.request.url} -> {r.status_code}: {r.text[:200]}"
+    assert COVERAGE in r.text, (
+        f"{COVERAGE} absent from DescribeCoverage — renamed or withdrawn. "
+        f"Check WMS GetCapabilities for a new edition before assuming it is gone: "
+        f"the 3rd edition replaced a WFS vector layer and looked withdrawn for a month."
     )
+    assert "3057" in r.text, "coverage is no longer advertised in EPSG:3057"
+
+
+def test_legend_still_binds_dn_95_to_cultivated_land(http):
+    """The whole agricultural-land map rests on this one number meaning this one
+    class. If NÍ renumber in a future edition, the map silently changes subject
+    unless something asserts the binding."""
+    r = http.get(WMS, params={
+        "service": "WMS", "version": "1.1.1", "request": "GetStyles",
+        "layers": STYLE_LAYER,
+    })
     assert r.status_code == 200, f"{r.request.url} -> {r.status_code}"
-    assert f"<Name>{LAYER}</Name>" in r.text, (
-        f"{r.request.url} -> {r.status_code}: {LAYER} absent from WFS "
-        f"capabilities — renamed or withdrawn; see the natt skill"
+
+    entries = {
+        int(float(e.get("quantity"))): e.get("label")
+        for e in ET.fromstring(r.text).iter()
+        if e.tag.endswith("ColorMapEntry") and e.get("quantity") and e.get("label")
+    }
+    assert entries, "no ColorMapEntry rows in the style — GetStyles changed shape"
+    assert CULTIVATED_DN in entries, (
+        f"DN {CULTIVATED_DN} is gone from the legend; classes present: "
+        f"{sorted(entries)[:20]}…"
+    )
+    assert entries[CULTIVATED_DN].startswith(CULTIVATED_CLASS), (
+        f"DN {CULTIVATED_DN} now means {entries[CULTIVATED_DN]!r}, not "
+        f"{CULTIVATED_CLASS} — the agricultural-land map would change subject"
     )
 
 
-def test_habitat_layer_serves_dn_and_htxt(http):
-    """`DN` + `htxt` are the only two attributes natt.py reads.
-
-    Bounded with count=5 and propertyName so no geometry crosses the wire.
-    """
-    r = http.get(
-        WFS,
-        params={
-            "service": "WFS",
-            "version": "2.0.0",
-            "request": "GetFeature",
-            "typeNames": LAYER,
-            "propertyName": "DN,htxt",
-            "outputFormat": "application/json",
-            "count": 5,
-        },
-    )
+def test_coverage_serves_pixels(http):
+    """One 1 km tile. Proves the service answers with data rather than a service
+    exception, without pulling any real volume — the full grid is ~15 GB."""
+    r = http.get(WCS, params=[
+        ("service", "WCS"), ("version", "2.0.1"), ("request", "GetCoverage"),
+        ("coverageId", COVERAGE), ("format", "image/tiff"),
+        ("compression", "Deflate"),
+        ("subset", "X(420000,421000)"), ("subset", "Y(400000,401000)"),
+    ])
     assert r.status_code == 200, f"{r.request.url} -> {r.status_code}: {r.text[:200]}"
-
-    payload = r.json()
-    assert payload.get("type") == "FeatureCollection", (
-        f"unexpected payload type {payload.get('type')!r}"
+    assert r.content.startswith((b"II", b"MM")), (
+        f"not a TIFF — service exception? {r.content[:200]!r}"
     )
-    features = payload.get("features") or []
-    assert features, f"{LAYER} returned zero features"
-
-    props = features[0].get("properties") or {}
-    assert "DN" in props and "htxt" in props, (
-        f"{LAYER} no longer exposes DN/htxt; got {sorted(props)}"
-    )
-    assert isinstance(props["DN"], int), (
-        f"DN is {type(props['DN']).__name__}, expected int — CQL filters like "
-        f"DN=95 assume an integer column"
-    )
-
-
-def test_cultivated_land_filter_still_matches(http):
-    """DN=95 (L14.2 Tún og akurlendi) — the filter the agricultural-land map runs.
-
-    `hits` only: the real fetch is ~16.6k polygons and belongs in a fetch run.
-    """
-    r = http.get(
-        WFS,
-        params={
-            "service": "WFS",
-            "version": "2.0.0",
-            "request": "GetFeature",
-            "typeNames": LAYER,
-            "resultType": "hits",
-            "CQL_FILTER": "DN=95",
-        },
-    )
-    assert r.status_code == 200, f"{r.request.url} -> {r.status_code}: {r.text[:200]}"
-
-    match = re.search(r'numberMatched="(\d+)"', r.text)
-    assert match, f"{r.request.url} -> {r.status_code}: no numberMatched in {r.text[:200]}"
-    # Non-emptiness, not a count — the polygon total shifts between editions.
-    assert int(match.group(1)) > 0, "DN=95 (L14.2) matched zero polygons"
+    assert len(r.content) > 1000, f"suspiciously small TIFF: {len(r.content)} bytes"
+    assert CRS == "EPSG:3057"

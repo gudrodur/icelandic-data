@@ -531,4 +531,12 @@ is where the turtles stop.
 - `tests/health/test_{source}.py` — upstream health probes, auto-marked `slow` + `health`
 - `reports/*.py` — one-off report scripts (gitignored, local-only, sit next to the `.html` they emit)
 
+> **Fork-only exception.** Three files under `reports/` ARE tracked here:
+> `build_esb_report.py`, `esb_kannanir_2026.json` and `esb-kannanir-2026-artifact.html`.
+> They are not a one-off. The builder holds numbers read by hand out of article prose plus
+> the editorial calls that go with them, so rerunning anything cannot regenerate it, and it
+> is the source of truth for a page that is published, shared publicly and updated
+> repeatedly. Untracked it lived in exactly one place on one disk. Everything else under
+> `reports/` follows upstream's rule unchanged.
+
 Inflation-specific analysis (derivation scripts, research reports, the whodunit blog post) lives in [`~/Code/inflation-whodunit`](../inflation-whodunit). That repo reads processed data from here.

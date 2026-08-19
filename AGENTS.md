@@ -159,8 +159,10 @@ uv run python scripts/kortagerð.py static -o reports/iceland-map.png
 uv run python scripts/kortagerð.py html -o reports/iceland-map.html
 uv run python scripts/kortagerð.py static --bounds capital --highlight "Reykjavíkurborg" -o reports/rvk.png
 
-# Náttúrufræðistofnun: download habitat-type polygons via WFS
-# (vistgerðir 1:25.000 3rd ed.; DN=95 = L14.2 Tún og akurlendi, ~1,800 km²)
+# Náttúrufræðistofnun: extract one habitat class from the 5 m raster (WCS).
+# The WFS vector layer was withdrawn 2026-07; see .agents/skills/natt.
+# vistgerðir 1:25.000 3. útg.; DN=95 = L14.2 Tún og akurlendi, ~1,800 km².
+# CC BY 4.0 — maps built from this must carry the attribution.
 uv run python scripts/natt.py habitat --dn 95
 uv run python scripts/natt.py inventory          # list all DN→htxt codes
 

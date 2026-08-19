@@ -3,11 +3,13 @@
 import csv
 from pathlib import Path
 
+import polars as pl
+
 
 def process_env_ops():
     """Compute wages vs other costs ratio from CKAN environmental ops data."""
-    raw = Path("data/raw/reykjavik/umhverfismal_heild.csv")
-    output = Path("data/processed/reykjavik_env_ops_ratio.csv")
+    raw = Path(__file__).resolve().parent.parent / "data" / "raw" / "reykjavik" / "umhverfismal_heild.csv"
+    output = Path(__file__).resolve().parent.parent / "data" / "processed" / "reykjavik_env_ops_ratio.csv"
     output.parent.mkdir(parents=True, exist_ok=True)
 
     rows = []
@@ -29,10 +31,7 @@ def process_env_ops():
                     "other_to_wages_ratio": round(ratio, 3),
                 })
 
-    with open(output, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
+    pl.DataFrame(rows).write_csv(output)
 
     print(f"Wrote {len(rows)} rows to {output}")
     for r in rows:

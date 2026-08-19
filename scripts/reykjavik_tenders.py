@@ -1,11 +1,11 @@
 """Scrape Reykjavík tender results for winter service contracts."""
 
-import csv
 import re
 import sys
 from pathlib import Path
 
 import httpx
+import polars as pl
 from bs4 import BeautifulSoup
 
 TENDER_URLS = {
@@ -122,7 +122,7 @@ def scrape_year(year: int, url: str) -> list[dict]:
 
 
 def main():
-    output = Path("data/processed/reykjavik_winter_tenders.csv")
+    output = Path(__file__).resolve().parent.parent / "data" / "processed" / "reykjavik_winter_tenders.csv"
     output.parent.mkdir(parents=True, exist_ok=True)
 
     all_tenders = []
@@ -131,10 +131,10 @@ def main():
         all_tenders.extend(tenders)
         print(f"  {year}: {len(tenders)} winter/street tenders found", file=sys.stderr)
 
-    with open(output, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["year", "tender_id", "description", "category"])
-        writer.writeheader()
-        writer.writerows(all_tenders)
+    pl.DataFrame(
+        all_tenders,
+        schema=["year", "tender_id", "description", "category"],
+    ).write_csv(output)
 
     print(f"\nWrote {len(all_tenders)} tenders to {output}", file=sys.stderr)
 

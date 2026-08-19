@@ -51,11 +51,12 @@ COLOR = {
 # grey dot rather than a 404. Kept as data rather than globbed from the test
 # directory: this script also runs against a history file alone.
 PROBES = [
-    "byggdastofnun", "car", "co2", "domstolar", "eea_sdi", "farsaeld_barna",
+    "althingi", "byggdastofnun", "car", "co2", "domstolar", "eea_sdi", "farsaeld_barna",
     "energy", "ferdamalastofa", "fiskistofa", "fjarlog", "fuel", "gengi", "hafogvatn", "hagstofan", "heimsmarkmid",
-    "hms", "landlaeknir", "laun", "lmi", "lmi_hrl", "loftgaedi",
+    "eurostat",
+    "hms", "housing_completions", "income_distribution", "landlaeknir", "lanamal", "laun", "lmi", "lmi_hrl", "loftgaedi",
     "maelabord_landbunadarins", "maskina", "nasdaq", "natt", "opnirreikningar",
-    "reykjavik", "rikisreikningur", "samgongustofa", "sedlabanki", "skatturinn",
+    "reykjavik", "rikisreikningur", "samgongustofa", "sedlabanki", "sedlabanki_fx", "skatturinn",
     "skipulagsmal", "skodanakannanir", "tekjusagan", "tenders", "umferd", "vedur",
     "ust_gis", "velsaeldarvisar", "vernd", "vinnumalastofnun",
 ]

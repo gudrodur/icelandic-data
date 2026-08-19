@@ -17,10 +17,9 @@ fails immediately.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
 import pathlib
 import re
+from datetime import datetime, timedelta, timezone
 
 from scripts.health_panel import COLOR, PROBES, dot, render
 
@@ -83,18 +82,16 @@ def test_sources_with_no_history_still_get_a_dot(tmp_path):
 
 
 def test_history_drives_the_colour(tmp_path):
-    # Dates relative to today, not the three days in July this was written on.
-    # render() only counts observations inside window_days (30), so a fixed
-    # fixture passes for a month and then silently starts reporting "unknown" —
-    # which is what it did from mid-August, unnoticed because ci.yml had not run
-    # since 2026-08-01.
-    today = datetime.now(timezone.utc).date()
     hist = tmp_path / "history.jsonl"
+    # Relative dates: the verdict window is "now − 30 days", and hardcoded
+    # timestamps age out — this test broke exactly that way in 2026-08 when
+    # its July fixtures slid out of the window and vedur went 'unknown'.
+    now = datetime.now(timezone.utc)
     hist.write_text(
         "\n".join(
-            f'{{"ts": "{(today - timedelta(days=n)).isoformat()}T06:17:00+00:00", '
+            f'{{"ts": "{(now - timedelta(days=2 - day)).isoformat()}", '
             f'"source": "vedur", "status": "healthy"}}'
-            for n in (1, 2, 3)
+            for day in (0, 1, 2)  # today, yesterday, day before
         ),
         encoding="utf-8",
     )

@@ -14,26 +14,13 @@ the chain can, and if it does the documented recipe silently scrapes an empty
 page. Probing the site root alone would be worthless: it returns 200 with a
 static shell even if every route below it is gone.
 
-Lightweight: resolving the token and asking Power BI whether that report still
-exists needs no browser. Only the DAX capture does, and that is manual-only.
-
-**This probe cannot run from a GitHub-hosted runner, and its verdict is wrong.**
-The 30-day window records `dead`, uptime 0.0, `last_ok: null` — 29 consecutive
-ConnectTimeouts — while the host answers 200 in 50 ms from an Icelandic
-connection. Measured from a runner on 2026-08-18 (egress 4.154.117.245, Azure):
-
-    island.is                          200  connect 0.21s
-    www.samgongustofa.is               302  connect 0.36s
-    bifreidatolur.samgongustofa.is     connect timeout after 25s
-
-DNS resolves correctly to 157.157.42.211 from both networks, so this is not
-split-horizon DNS, not Iceland-wide filtering, and not even Samgöngustofa-wide:
-the organisation's own main site answers. Something on this one host drops SYN
-from that network.
-
-So the source is healthy and the monitor is measuring its own reachability.
-Until the probe runs from somewhere that can reach the host, read `dead` here as
-"not observed", never as "withdrawn".
+This probe needs no browser at all — only the DAX capture does, and that stays
+a manual recipe. It ran in the manual `browser` lane from 2026-08-06 until the
+self-hosted mac-mini runner (labels: self-hosted, iceland) took over the daily
+lane: the host geo-fences datacenter address space (`httpx.ConnectTimeout`
+from every GitHub Actions runner) but answers Icelandic IPs in ~50 ms, and the
+daily job now runs from Iceland. Nothing left in the repo needs a manual
+browser lane, so the marker is gone with it.
 """
 from __future__ import annotations
 

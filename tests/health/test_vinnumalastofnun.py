@@ -33,14 +33,6 @@ from tests.health.conftest import assert_fresh
 
 XLSM_TYPE = "application/vnd.ms-excel.sheet.macroenabled.12"
 
-# Match any .xlsm asset on the page, not one whose URL ends in a readable
-# filename. Contentful stopped putting the title in the URL: the workbook
-# published on 2026-08-11 is served as
-# `…/17c81787-999e-4a0c-bb23-a27d8c1fc74b.xlsm`, and the name survives only in
-# the link text. The old regex therefore matched nothing at all and the probe
-# reported "the page was restructured" — the one thing that had not happened —
-# instead of "you are pinned to last month's workbook", which is the whole
-# reason this test exists. The page carries exactly one .xlsm link.
 _ASSET_RE = re.compile(r"https://assets\.ctfassets\.net/[\w/-]+\.xlsm")
 
 
@@ -64,8 +56,8 @@ def test_hardcoded_excel_url_is_the_current_upload(http):
 
     linked = set(_ASSET_RE.findall(r.text))
     assert linked, (
-        f"no .xlsm asset linked from {LANDING} — the page really was "
-        f"restructured this time, or the workbook was withdrawn"
+        f"no .xlsm workbook link on {LANDING} — the page was "
+        f"restructured, or the workbook was removed"
     )
     assert EXCEL_URL in linked, (
         f"EXCEL_URL in scripts/vinnumalastofnun.py is behind: {LANDING} now "

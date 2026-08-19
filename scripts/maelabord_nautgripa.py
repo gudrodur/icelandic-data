@@ -21,12 +21,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import csv
 import json
 import re
 import sys
 from pathlib import Path
 
+import polars as pl
 from playwright.async_api import async_playwright
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -39,8 +39,8 @@ REPORT = (
 )
 EFTIR_BUI_PAGE = "ReportSection6ce1bcdf21048698c67b"
 
-OUT_RAW = Path("data/raw/hagstofan/nautgripa_recipients_raw.json")
-OUT_CSV = Path("data/processed/nautgripa_recipients.csv")
+OUT_RAW = Path(__file__).resolve().parent.parent / "data" / "raw" / "hagstofan" / "nautgripa_recipients_raw.json"
+OUT_CSV = Path(__file__).resolve().parent.parent / "data" / "processed" / "nautgripa_recipients.csv"
 
 FARM_LABEL_RE = re.compile(r"^\s*(\d{6,8})\s*-\s*(.+?)\s*$")
 NAUTGRIPA_LABEL = "Nautgriparækt"  # resolve per-body via the D0 value-dict
@@ -366,21 +366,20 @@ def cmd_parse(args: argparse.Namespace) -> None:
     recipients.sort(key=lambda r: -(r.get("nautgripa_upphaed") or 0))
 
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    with OUT_CSV.open("w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=[
-            "busnr", "landsnr", "nafn",
-            "nautgripir", "nautgripa_upphaed", "total_upphaed",
-        ])
-        w.writeheader()
-        for r in recipients:
-            w.writerow({
+    pl.DataFrame(
+        [
+            {
                 "busnr": r["busnr"],
                 "landsnr": busnr_to_landsnr(r["busnr"]),
                 "nafn": r["nafn"],
-                "nautgripir": r.get("nautgripir") or "",
+                "nautgripir": r.get("nautgripir"),
                 "nautgripa_upphaed": r.get("nautgripa_upphaed") or 0,
                 "total_upphaed": r.get("total_upphaed") or 0,
-            })
+            }
+            for r in recipients
+        ],
+        schema=["busnr", "landsnr", "nafn", "nautgripir", "nautgripa_upphaed", "total_upphaed"],
+    ).write_csv(OUT_CSV)
     print(f"Wrote {OUT_CSV}: {len(recipients)} cattle recipients, "
           f"{len(all_farms)} farms scraped total.", file=sys.stderr)
 

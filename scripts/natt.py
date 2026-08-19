@@ -42,6 +42,7 @@ import csv
 import json
 import re
 import sys
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -80,6 +81,14 @@ TILE_M = 10_000.0
 RAW = Path("data/raw/natt/vistgerdir")
 
 
+# A full harvest is hundreds of requests over the better part of an hour against
+# someone else's public server, so a transient 5xx is a certainty, not a risk.
+# The first version of this had no retry and died on a 502 at tile 240 of 582.
+RETRIES = 5
+BACKOFF = (2, 5, 15, 45)
+PAUSE_S = 0.3
+
+
 def _tiff(params: list[tuple[str, str]], *, timeout: float) -> bytes:
     """GetCoverage as GeoTIFF. Deflate because a categorical raster compresses
     ~18x (measured: an 8.4 MB tile becomes 0.47 MB), and the transfer is the
@@ -89,11 +98,26 @@ def _tiff(params: list[tuple[str, str]], *, timeout: float) -> bytes:
         ("coverageId", COVERAGE), ("format", "image/tiff"),
         ("compression", "Deflate"), *params,
     ]
-    r = httpx.get(WCS, params=q, timeout=timeout, follow_redirects=True)
-    r.raise_for_status()
-    if not r.content.startswith((b"II", b"MM")):
-        raise RuntimeError(f"WCS did not return a TIFF: {r.content[:200]!r}")
-    return r.content
+    last: Exception | None = None
+    for attempt in range(RETRIES):
+        try:
+            r = httpx.get(WCS, params=q, timeout=timeout, follow_redirects=True)
+            if r.status_code >= 500:
+                raise httpx.HTTPStatusError(
+                    f"{r.status_code} from WCS", request=r.request, response=r)
+            r.raise_for_status()
+            if not r.content.startswith((b"II", b"MM")):
+                raise RuntimeError(f"WCS did not return a TIFF: {r.content[:200]!r}")
+            return r.content
+        except (httpx.HTTPStatusError, httpx.TransportError) as e:
+            last = e
+            if attempt == RETRIES - 1:
+                break
+            wait = BACKOFF[min(attempt, len(BACKOFF) - 1)]
+            print(f"    {type(e).__name__} — retrying in {wait}s "
+                  f"({attempt + 1}/{RETRIES - 1})", file=sys.stderr)
+            time.sleep(wait)
+    raise RuntimeError(f"WCS failed after {RETRIES} attempts: {last}") from last
 
 
 def _read(blob: bytes) -> tuple[np.ndarray, rasterio.Affine]:
@@ -175,18 +199,35 @@ def _all_tiles() -> list[tuple[float, float]]:
 
 
 def harvest(dn: int, *, recon: bool = True) -> list[dict]:
-    """Pass 2 — polygonise the class, tile by tile, at native resolution."""
+    """Pass 2 — polygonise the class, tile by tile, at native resolution.
+
+    Each tile's polygons are cached on disk as they are produced, so an
+    interrupted run resumes instead of starting over. Learned the hard way: a
+    502 at tile 240 of 582 threw away forty minutes of someone else's bandwidth
+    as well as ours.
+    """
     tiles = _recon(dn) if recon else _all_tiles()
-    print(f"  {len(tiles)} tiles to read at {NATIVE_M:.0f} m", file=sys.stderr)
+    cache = RAW / ".tiles"
+    cache.mkdir(parents=True, exist_ok=True)
+    done = sum(1 for tx, ty in tiles
+               if (cache / f"dn{dn}_{int(tx)}_{int(ty)}.json").exists())
+    print(f"  {len(tiles)} tiles to read at {NATIVE_M:.0f} m"
+          f"{f' ({done} already cached)' if done else ''}", file=sys.stderr)
+
     feats: list[dict] = []
     for i, (tx, ty) in enumerate(tiles, 1):
-        x1, y1 = min(tx + TILE_M, X_MAX), min(ty + TILE_M, Y_MAX)
-        arr, tr = tile(tx, ty, x1, y1, timeout=300.0)
-        mask = arr == dn
-        if not mask.any():
-            continue
-        for geom, _ in raster_shapes(mask.astype(np.uint8), mask=mask, transform=tr):
-            feats.append(geom)
+        hit = cache / f"dn{dn}_{int(tx)}_{int(ty)}.json"
+        if hit.exists():
+            feats.extend(json.loads(hit.read_text(encoding="utf-8")))
+        else:
+            x1, y1 = min(tx + TILE_M, X_MAX), min(ty + TILE_M, Y_MAX)
+            arr, tr = tile(tx, ty, x1, y1, timeout=300.0)
+            mask = arr == dn
+            local = [g for g, _ in raster_shapes(
+                mask.astype(np.uint8), mask=mask, transform=tr)] if mask.any() else []
+            hit.write_text(json.dumps(local), encoding="utf-8")
+            feats.extend(local)
+            time.sleep(PAUSE_S)
         if i % 10 == 0 or i == len(tiles):
             print(f"  tile {i:>4}/{len(tiles)}  {len(feats):,} polygons",
                   file=sys.stderr)

@@ -1,0 +1,52 @@
+article_id,published_at,scope,pollster,title,topic,party,pct,approx,source,sample_size,response_rate_pct,fielded_note
+visir-20262827389,2026-01-11T12:20:00,national,Maskína,Meirihluti hlynntur aðildarviðræðum: „Margt breyst á stuttum tíma“,esb,Hlynnt,53.0,false,prose,,,
+visir-20262838574,2026-02-04T08:43:00,national,,Þjóðin klofin gagnvart ESB og fylgi við NATO á hreyfingu,esb,Andvígt,24.0,false,prose,1672,48.8,21. janúar til 2. febrúar
+visir-20262838574,2026-02-04T08:43:00,national,,Þjóðin klofin gagnvart ESB og fylgi við NATO á hreyfingu,esb,Hlynnt,42.0,false,prose,1672,48.8,21. janúar til 2. febrúar
+visir-20262838574,2026-02-04T08:43:00,national,,Þjóðin klofin gagnvart ESB og fylgi við NATO á hreyfingu,esb,Óákveðin,20.0,false,prose,1672,48.8,21. janúar til 2. febrúar
+visir-20262853308,2026-03-09T13:24:00,national,,Iðnaðurinn forherðist í andstöðu gegn ESB,esb,Andvígt,57.0,false,prose,,,
+visir-20262853308,2026-03-09T13:24:00,national,,Iðnaðurinn forherðist í andstöðu gegn ESB,esb,Hlynnt,10.0,false,prose,,,
+visir-20262853438,2026-03-09T16:12:00,national,Gallup,Þriðjungur andvígur atkvæðagreiðslunni,esb,Andvígt,22.0,false,prose,,,
+visir-20262853438,2026-03-09T16:12:00,national,Gallup,Þriðjungur andvígur atkvæðagreiðslunni,esb,Hlynnt,83.0,false,prose,,,
+visir-20262853438,2026-03-09T16:12:00,national,Gallup,Þriðjungur andvígur atkvæðagreiðslunni,esb,Já,52.0,false,prose,,,
+visir-20262866089,2026-04-07T21:40:00,national,Gallup,Meirihluti þeirra sem taka afstöðu andvíg aðild að ESB,esb,Andvígt,47.0,false,prose,2198,37.2,19. til 31. mars
+visir-20262866089,2026-04-07T21:40:00,national,Gallup,Meirihluti þeirra sem taka afstöðu andvíg aðild að ESB,esb,Hlynnt,40.0,false,prose,2198,37.2,19. til 31. mars
+visir-20262866089,2026-04-07T21:40:00,national,Gallup,Meirihluti þeirra sem taka afstöðu andvíg aðild að ESB,esb,Óákveðin,13.0,false,prose,2198,37.2,19. til 31. mars
+visir-20262866297,2026-04-08T12:07:00,national,,Á brattann að sækja fyrir aðildarsinna,esb,Andvígt,47.0,false,prose,,,
+visir-20262866297,2026-04-08T12:07:00,national,,Á brattann að sækja fyrir aðildarsinna,esb,Hlynnt,40.0,false,prose,,,
+visir-20262869821,2026-04-15T21:13:00,national,Maskína,Fleiri andvígir aðild nú en í fyrra,esb,Andvígt,46.0,false,prose,,,
+visir-20262869821,2026-04-15T21:13:00,national,Maskína,Fleiri andvígir aðild nú en í fyrra,esb,Hlynnt,42.0,false,prose,,,
+visir-20262895588,2026-06-10T11:25:00,national,,Fleiri andvígir inngöngu í ESB,esb,Andvígt,54.0,false,prose,,,
+visir-20262895588,2026-06-10T11:25:00,national,,Fleiri andvígir inngöngu í ESB,esb,Hlynnt,46.0,false,prose,,,
+visir-20262895588,2026-06-10T11:25:00,national,,Fleiri andvígir inngöngu í ESB,esb,Óákveðin,13.0,false,prose,,,
+visir-20262897210,2026-06-13T18:10:00,national,Maskína,Fleiri hlynntir en andvígir samkvæmt nýrri könnun,esb,Andvígt,39.4,false,prose,,,
+visir-20262897210,2026-06-13T18:10:00,national,Maskína,Fleiri hlynntir en andvígir samkvæmt nýrri könnun,esb,Hlynnt,44.5,false,prose,,,
+visir-20262897210,2026-06-13T18:10:00,national,Maskína,Fleiri hlynntir en andvígir samkvæmt nýrri könnun,esb,Óákveðin,14.6,false,prose,,,
+visir-20262902621,2026-06-27T11:37:00,national,,Rétt rúmur helmingur myndi segja já í ágúst,esb,Já,52.0,false,prose,1993,41.1,
+visir-20262902621,2026-06-27T11:37:00,national,,Rétt rúmur helmingur myndi segja já í ágúst,esb,Nei,48.0,false,prose,1993,41.1,
+visir-20262904348,2026-07-01T19:45:00,national,Gallup,Fylgi Sjálfstæðisflokks ekki meira í sex ár,parties,Flokkur fólksins,4.6,false,prose,12102,38.5,1.–30. júní 2026
+visir-20262904348,2026-07-01T19:45:00,national,Gallup,Fylgi Sjálfstæðisflokks ekki meira í sex ár,parties,Framsóknarflokkur,5.3,false,prose,12102,38.5,1.–30. júní 2026
+visir-20262904348,2026-07-01T19:45:00,national,Gallup,Fylgi Sjálfstæðisflokks ekki meira í sex ár,parties,Miðflokkur,15.1,false,prose,12102,38.5,1.–30. júní 2026
+visir-20262904348,2026-07-01T19:45:00,national,Gallup,Fylgi Sjálfstæðisflokks ekki meira í sex ár,parties,Sjálfstæðisflokkur,24.9,false,prose,12102,38.5,1.–30. júní 2026
+visir-20262904348,2026-07-01T19:45:00,national,Gallup,Fylgi Sjálfstæðisflokks ekki meira í sex ár,parties,Vinstri græn,5.0,false,prose,12102,38.5,1.–30. júní 2026
+visir-20262904348,2026-07-01T19:45:00,national,Gallup,Fylgi Sjálfstæðisflokks ekki meira í sex ár,parties,Viðreisn,11.4,false,prose,12102,38.5,1.–30. júní 2026
+visir-20262914497,2026-07-28T12:39:00,national,Gallup,Meirihluti aðildarfyrirtækjanna andvígur,esb,Andvígt,66.0,false,prose,,,
+visir-20262915377,2026-07-30T13:52:00,national,,Meirihluti ætlar að segja já í ágúst,esb,Andvígt,46.9,false,prose,,,
+visir-20262915377,2026-07-30T13:52:00,national,,Meirihluti ætlar að segja já í ágúst,esb,Já,53.0,false,prose,,,
+visir-20262915377,2026-07-30T13:52:00,national,,Meirihluti ætlar að segja já í ágúst,esb,Nei,47.0,false,prose,,,
+visir-20262915377,2026-07-30T13:52:00,national,,Meirihluti ætlar að segja já í ágúst,esb,Óákveðin,13.5,false,prose,,,
+visir-20262917099,2026-08-04T18:31:00,national,Maskína,Meirihluti telur vexti lækka en undanþágu í sjávarútvegi ólíklega,esb,Óákveðin,1.5,false,prose,,,22. til 29. júlí
+visir-20262917613,2026-08-05T22:10:00,national,Gallup,Hnífjafnt í nýrri könnun,esb,,,false,none,,,15.–30. júlí
+ruv-483052,2026-08-06T08:11:00,national,Gallup,Hnífjafnt milli fylkinga,esb,Andvígt,46.0,false,manual,1996,40.3,15. til 30. júlí
+ruv-483052,2026-08-06T08:11:00,national,Gallup,Hnífjafnt milli fylkinga,esb,Hlynnt,46.0,false,manual,1996,40.3,15. til 30. júlí
+ruv-483052,2026-08-06T08:11:00,national,Gallup,Hnífjafnt milli fylkinga,esb,Óákveðin,8.0,false,manual,1996,40.3,15. til 30. júlí
+visir-20262920711,2026-08-13T18:31:00,national,Maskína,Forskot Já-hliðarinnar mælist minna,esb,Já,52.2,false,prose,,,7. til 11. ágúst
+visir-20262920711,2026-08-13T18:31:00,national,Maskína,Forskot Já-hliðarinnar mælist minna,esb,Nei,47.8,false,prose,,,7. til 11. ágúst
+ruv-483977,2026-08-14T18:06:55.631203Z,national,Gallup,Nýr þjóðarpúls: Ekki marktækur munur á fylkingum,esb,Já,51.5,false,prose,4128,41.9,1.–13. ágúst
+ruv-483977,2026-08-14T18:06:55.631203Z,national,Gallup,Nýr þjóðarpúls: Ekki marktækur munur á fylkingum,esb,Nei,48.5,false,prose,4128,41.9,1.–13. ágúst
+ruv-483977,2026-08-14T18:06:55.631203Z,national,Gallup,Nýr þjóðarpúls: Ekki marktækur munur á fylkingum,esb,Óákveðin,7.0,false,prose,4128,41.9,1.–13. ágúst
+visir-20262921222,2026-08-14T18:33:00,national,Gallup,Enginn marktækur munur á jáurum og neiurum,esb,Já,51.5,false,prose,,,
+visir-20262921222,2026-08-14T18:33:00,national,Gallup,Enginn marktækur munur á jáurum og neiurum,esb,Nei,48.5,false,prose,,,
+visir-20262921222,2026-08-14T18:33:00,national,Gallup,Enginn marktækur munur á jáurum og neiurum,esb,Óákveðin,7.0,false,prose,,,
+visir-20262921428,2026-08-15T15:41:00,national,,Miðflokksmenn helmingi líklegri til að segja já en Sjálfstæðismenn,esb,Já,51.5,false,prose,,,
+visir-20262921428,2026-08-15T15:41:00,national,,Miðflokksmenn helmingi líklegri til að segja já en Sjálfstæðismenn,esb,Nei,48.5,false,prose,,,
+visir-20262921428,2026-08-15T15:41:00,national,,Miðflokksmenn helmingi líklegri til að segja já en Sjálfstæðismenn,esb,Óákveðin,7.0,false,prose,,,

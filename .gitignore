@@ -1,8 +1,18 @@
 # Data (large files, regenerable)
 data/raw/
-data/processed/
+data/processed/*
 data/geodata/
 data/cache/
+
+# FORK-ONLY EXCEPTION, same reasoning as the reports/ one below. This CSV is
+# derived, but it is NOT fully re-derivable: three rows are `source=manual`
+# (ruv-483052, the Gallup/Áfram Ísland poll) because RÚV never tagged that
+# article a poll, so `list` cannot see it and `fetch` cannot reach it. Rerunning
+# the pipeline on an empty checkout silently produces a SMALLER file, and
+# AGENTS.md tells readers to query this exact path with duckdb.
+# It is 8 KB, and because rows are written sorted, a diff means something real:
+# a number that moves is either an edited article or a changed extractor.
+!data/processed/skodanakannanir.csv
 
 # DuckDB
 *.duckdb

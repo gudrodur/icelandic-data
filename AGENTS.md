@@ -538,5 +538,12 @@ is where the turtles stop.
 > is the source of truth for a page that is published, shared publicly and updated
 > repeatedly. Untracked it lived in exactly one place on one disk. Everything else under
 > `reports/` follows upstream's rule unchanged.
+>
+> `data/processed/skodanakannanir.csv` is tracked for the same reason. It looks derived, and
+> mostly is, but three rows are `source=manual`: the Gallup/Áfram Ísland poll (`ruv-483052`)
+> is not reachable by `list`, because RÚV never tagged that article a poll. Rerunning the
+> pipeline on a fresh checkout therefore produces a *smaller* file, silently, and this is the
+> path the Quick Commands above tell you to query with duckdb. Nothing else under
+> `data/processed/` is tracked.
 
 Inflation-specific analysis (derivation scripts, research reports, the whodunit blog post) lives in [`~/Code/inflation-whodunit`](../inflation-whodunit). That repo reads processed data from here.

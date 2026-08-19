@@ -361,6 +361,21 @@ uv run pytest tests/test_cache_consistency.py tests/test_maps_render.py -v
 
 ## Tests and source health
 
+> **Fork note (`gudrodur/icelandic-data`).** Everything below describes upstream's setup and
+> is accurate for `jokull/icelandic-data`. Two things differ here, and both are easy to
+> misread because the workflow file is byte-identical to upstream on purpose:
+>
+> - **The runner is not the mac-mini.** Probes run on `fedora-icelandic-data`, a self-hosted
+>   runner on Guðröður's Fedora box, registered to this repo with labels
+>   `self-hosted, iceland, fedora`. The `iceland` label was chosen deliberately so
+>   `runs-on: [self-hosted, iceland]` needs no fork-side edit. Consequence: the daily run
+>   depends on that machine being awake at 06:17 UTC. If it is off, the run does not happen,
+>   which the history records as *not observed*, never as *down*.
+> - **There is no dead-man's-switch on this fork.** The mechanism described under "The blind
+>   spot" runs on the mini and watches upstream's `health-history`. Nothing watches ours. So
+>   for this repo that section documents a safety net we do not have.
+
+
 ```bash
 uv run pytest -m "not slow"            # fast, offline — what PR CI runs
 uv run pytest -m slow                  # network + Playwright integration tests

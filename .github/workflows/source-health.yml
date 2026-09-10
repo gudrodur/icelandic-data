@@ -4,7 +4,7 @@ name: Source health
 # depends on. Deliberately NOT a fetch run: no full datasets, no PDF
 # extraction, no geodata rebuilds.
 #
-# Both jobs run on the self-hosted mac-mini (labels: self-hosted, iceland).
+# Both jobs run on a self-hosted runner on an Icelandic residential IP (labels: self-hosted, iceland).
 # GitHub-hosted runners sit in Azure datacenters with no Iceland region, which
 # breaks geo-fenced sources (bifreidatolur.samgongustofa.is times out from
 # datacenter IPs) and trips Power BI/Tableau bot detection. From an Icelandic
@@ -28,7 +28,7 @@ permissions:
 jobs:
   lightweight:
     name: Lightweight probes
-    # Self-hosted on the mac-mini (solberg.club, Iceland): geo-fenced sources
+    # Self-hosted runner on an Icelandic residential IP: geo-fenced sources
     # like bifreidatolur.samgongustofa.is answer Icelandic IPs but time out
     # from GitHub's datacenter ranges. Labels: self-hosted, iceland.
     runs-on: [self-hosted, iceland]

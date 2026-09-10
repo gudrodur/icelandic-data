@@ -16,7 +16,7 @@ static shell even if every route below it is gone.
 
 This probe needs no browser at all — only the DAX capture does, and that stays
 a manual recipe. It ran in the manual `browser` lane from 2026-08-06 until the
-self-hosted mac-mini runner (labels: self-hosted, iceland) took over the daily
+self-hosted runner on an Icelandic residential IP (labels: self-hosted, iceland) took over the daily
 lane: the host geo-fences datacenter address space (`httpx.ConnectTimeout`
 from every GitHub Actions runner) but answers Icelandic IPs in ~50 ms, and the
 daily job now runs from Iceland. Nothing left in the repo needs a manual

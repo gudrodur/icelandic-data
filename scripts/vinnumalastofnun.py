@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import base64
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -31,14 +32,50 @@ POWERBI_PAGE = "ReportSection7e7dca64570c18a74eb9"
 
 # Contentful serves each upload at a fresh, content-addressed asset URL — the
 # old one keeps working forever, so a stale constant here silently pins us to an
-# old workbook rather than 404ing. The current URL is the one linked from
-# LANDING; tests/health/test_vinnumalastofnun.py compares the two and reports
-# degraded when they drift apart.
+# old workbook rather than 404ing. The workbook is published monthly, so the URL
+# rotates monthly: EXCEL_URL is only the fallback for when LANDING cannot be
+# reached or links no workbook. cmd_excel resolves the current link from LANDING
+# at run time; tests/health/test_vinnumalastofnun.py compares the fallback
+# against the live page and reports degraded when they drift apart.
 LANDING = "https://island.is/s/vinnumalastofnun/maelabord-og-toelulegar-upplysingar"
 EXCEL_URL = (
-    "https://assets.ctfassets.net/8k0h54kbe6bj/3PPeybECQyGMiHHm2VDOIZ/"
-    "9efa303333890212d17888a5fa09524e/17c81787-999e-4a0c-bb23-a27d8c1fc74b.xlsm"
+    "https://assets.ctfassets.net/8k0h54kbe6bj/7BrzfSxUGzwSYipW36rSwK/"
+    "f52da59cd4da46e37008a705a386b7fc/Talnagogn_atvinnuleysi.xlsm"
 )
+
+_ASSET_RE = re.compile(r"https://assets\.ctfassets\.net/[\w/-]+\.xlsm")
+
+
+def discover_workbook_urls(page_html: str) -> set[str]:
+    """Contentful .xlsm workbook links in a landing page body (shared with the health probe)."""
+    return set(_ASSET_RE.findall(page_html))
+
+
+def resolve_excel_url(client: httpx.Client | None = None) -> str:
+    """Current workbook URL from LANDING, EXCEL_URL when undiscoverable.
+
+    Prefers EXCEL_URL while the page still links it, so a reordered page does
+    not flip the download to a different workbook unannounced.
+    """
+    try:
+        if client is None:
+            with httpx.Client(timeout=60, follow_redirects=True) as c:
+                r = c.get(LANDING)
+                r.raise_for_status()
+                linked = discover_workbook_urls(r.text)
+        else:
+            r = client.get(LANDING)
+            r.raise_for_status()
+            linked = discover_workbook_urls(r.text)
+    except Exception as e:
+        print(f"could not resolve current workbook from {LANDING} ({e}); using fallback", file=sys.stderr)
+        return EXCEL_URL
+    if not linked:
+        print(f"no workbook link on {LANDING}; using fallback", file=sys.stderr)
+        return EXCEL_URL
+    if EXCEL_URL in linked:
+        return EXCEL_URL
+    return sorted(linked)[0]
 
 
 def _embed_url() -> str:
@@ -50,9 +87,10 @@ def _embed_url() -> str:
 def cmd_excel(args=None):
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     out = RAW_DIR / "Talnagogn_atvinnuleysi.xlsm"
-    print(f"Downloading {EXCEL_URL}", file=sys.stderr)
+    url = resolve_excel_url()
+    print(f"Downloading {url}", file=sys.stderr)
     with httpx.Client(timeout=60, follow_redirects=True) as c:
-        r = c.get(EXCEL_URL)
+        r = c.get(url)
         r.raise_for_status()
         out.write_bytes(r.content)
     print(f"  → {out} ({len(r.content):,} bytes)", file=sys.stderr)

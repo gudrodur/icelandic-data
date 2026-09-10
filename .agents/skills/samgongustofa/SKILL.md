@@ -155,8 +155,8 @@ helps). Full helper reference is in the `powerbi` skill.
 `bifreidatolur.samgongustofa.is` answers Icelandic IPs in ~50 ms and
 `ConnectTimeout`s from datacenter address space (GitHub runners, cloud VMs,
 most hosted notebooks cannot reach it). Run the scraper and the health probe
-from an Icelandic connection. The daily health probe therefore runs on the
-self-hosted mac-mini in Iceland (see `AGENTS.md`).
+from an Icelandic connection. The daily health probe therefore runs on a
+self-hosted runner on an Icelandic residential IP (see `AGENTS.md`).
 
 ## Caveats
 

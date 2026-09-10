@@ -1,4 +1,4 @@
-"""Health probe — Vinnumálastofnun (Directorate of Labour).
+"""Health probe — Vinnumalastofnun (Directorate of Labour).
 
 scripts/vinnumalastofnun.py has two upstreams, and only one of them can fail
 loudly on its own:
@@ -6,9 +6,11 @@ loudly on its own:
   1. **The Excel workbook on Contentful.** Contentful is content-addressed: each
      monthly upload lands on a *new* asset URL and the old one keeps serving
      200 forever. So a dead constant never 404s — it just quietly pins us to an
-     old workbook. The probe therefore checks two different things: that
-     EXCEL_URL still serves a workbook (hard), and that it is still the URL
-     island.is links (degraded — we are up, just behind).
+     old workbook. The script resolves the current link from the landing page
+     at run time (EXCEL_URL is only the fallback), so the probe checks two
+     different things: that the resolved URL still serves a workbook (hard),
+     and that the fallback is still the URL island.is links (degraded — the
+     download works, it just leans on a fallback that is now behind).
   2. **The Power BI embed.** Report key still published, and the default page
      the script deep-links to (POWERBI_PAGE) still exists in the report.
 
@@ -17,7 +19,6 @@ this asserts is its precondition.
 """
 from __future__ import annotations
 
-import re
 from datetime import timedelta
 
 import pytest
@@ -28,33 +29,35 @@ from scripts.vinnumalastofnun import (
     POWERBI_PAGE,
     POWERBI_REPORT_KEY,
     _embed_url,
+    discover_workbook_urls,
+    resolve_excel_url,
 )
 from tests.health.conftest import assert_fresh
 
 XLSM_TYPE = "application/vnd.ms-excel.sheet.macroenabled.12"
 
-_ASSET_RE = re.compile(r"https://assets\.ctfassets\.net/[\w/-]+\.xlsm")
-
 
 def test_excel_workbook_is_served(http):
     """HEAD only — a health probe never pulls the half-megabyte workbook."""
-    r = http.head(EXCEL_URL)
-    assert r.status_code == 200, f"{EXCEL_URL} -> {r.status_code}"
+    url = resolve_excel_url(http)
+    r = http.head(url)
+    assert r.status_code == 200, f"{url} -> {r.status_code}"
     assert r.headers["content-type"].startswith(XLSM_TYPE), r.headers["content-type"]
     assert int(r.headers["content-length"]) > 10_000, (
-        f"{EXCEL_URL} -> suspiciously small workbook: {r.headers['content-length']} bytes"
+        f"{url} -> suspiciously small workbook: {r.headers['content-length']} bytes"
     )
 
 
 @pytest.mark.degraded_ok
 def test_hardcoded_excel_url_is_the_current_upload(http):
-    """Degraded, not failed: an old asset URL still serves, so the fetch works —
-    it just returns last quarter's numbers. This is the only signal that a new
-    workbook was published."""
+    """Degraded, not failed: the script resolves the workbook at run time and
+    only falls back to EXCEL_URL, so a stale fallback changes nothing today.
+    This is the only signal that a new workbook was published and the fallback
+    constant should follow it."""
     r = http.get(LANDING)
     assert r.status_code == 200, f"{r.request.url} -> {r.status_code}"
 
-    linked = set(_ASSET_RE.findall(r.text))
+    linked = discover_workbook_urls(r.text)
     assert linked, (
         f"no .xlsm workbook link on {LANDING} — the page was "
         f"restructured, or the workbook was removed"

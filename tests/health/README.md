@@ -13,7 +13,7 @@ uv run pytest -m "health and degraded_ok"      # staleness / known-soft (daily, 
 There is no `browser` lane. The only probe ever marked `browser` was
 `samgongustofa` — plain HTTP, but geo-fenced: `bifreidatolur.samgongustofa.is`
 answers in ~50 ms from an Icelandic IP and timed out from every GitHub runner.
-The daily job now runs on the self-hosted mac-mini in Iceland (see AGENTS.md),
+The daily job now runs on a self-hosted runner on an Icelandic residential IP (see AGENTS.md),
 so the marker and the lane went away with the geo-fence.
 
 See the `new-data-source` skill for how to write one, and `AGENTS.md` for how

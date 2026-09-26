@@ -29,7 +29,7 @@ Code, and `CLAUDE.md` symlinks to `AGENTS.md`. One set of files, both agents.
 
 ## Data sources
 
-Currently 49 skills covering national statistics, government dashboards
+Currently <!-- live:skill-count -->58<!-- /live --> skills covering national statistics, government dashboards
 (_mælaborð_), regulatory filings, and utility APIs. Each skill's frontmatter
 `description` is its index entry — run `ls .agents/skills/` to enumerate them, and see
 [`AGENTS.md`](AGENTS.md) for the quick-commands reference.

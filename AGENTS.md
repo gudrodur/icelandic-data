@@ -37,7 +37,7 @@ a table in this file would be a second, staler copy that cannot trigger anything
 Run `ls .agents/skills/` to enumerate them.
 
 Keep each `description` under ~160 characters: Codex truncates when all descriptions
-combined exceed 8,000 characters, and with 45 skills that budget is the binding constraint.
+combined exceed 8,000 characters, and with <!-- live:skill-count -->58<!-- /live --> skills that budget is the binding constraint.
 
 **When asked about a new data source:** follow the `new-data-source` skill.
 

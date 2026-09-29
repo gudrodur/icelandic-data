@@ -137,9 +137,14 @@ class PowerBIPublicEmbed:
 
     @staticmethod
     def sections(payload: dict) -> dict[str, str]:
-        """{sectionName: displayName} — the report's pages."""
+        """{sectionName: displayName} — the report's pages.
+
+        Power BI renamed a section's `name` to `objectName` around 2026-09-12
+        (the same `ReportSection…` value); read either, so the probe checks the
+        page and not the payload's spelling.
+        """
         return {
-            s["name"]: s.get("displayName", "")
+            s.get("name") or s["objectName"]: s.get("displayName", "")
             for s in payload.get("exploration", {}).get("sections", [])
         }
 

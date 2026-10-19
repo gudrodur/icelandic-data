@@ -25,6 +25,20 @@ GROUP_ID = "a08a802a-ca7b-4103-9052-18a85d009ec4"
 TOKEN_URL = f"https://tekjusagan.is/api/report/{REPORT_ID}"
 SPA_URL = "https://tekjusagan.is/"
 
+# NOTE (2026-10-19): the SPA was rebuilt on 2026-10-15 and no longer embeds
+# Power BI. TOKEN_URL above now returns the SPA index (text/html), and the
+# bundles contain no embedToken/powerbi code. The data now comes from an open
+# JSON backend, found by reading the SPA's lazy chunks:
+#   POST /api/sqldata/<procedure>          body = flat JSON of filter values
+#   POST /api/sqlseries/<queryId>?from=&to=  (queryId e.g. IncomeVariables)
+# REPORT_ID/GROUP_ID/TOKEN_URL/fetch_token/_scrape are kept only as the legacy
+# record; the health probe now targets the sqldata API below.
+API_URL = SPA_URL + "api/sqldata/"
+# Smallest stable call: head-count of one income decile in one year. Answers
+# {"success": true, "items": [{"Heildarfjöldi": <int>}]} (15174 for 1991).
+PROBE_ENDPOINT = API_URL + "incomemobilitynumberpeople"
+PROBE_PAYLOAD = {"IncomeGroup": 3, "Year": "1991"}
+
 RAW_DIR = Path(__file__).parent.parent / "data" / "raw" / "tekjusagan"
 
 # Direct SPA routes that render Power BI report pages. Each triggers its own

@@ -9,8 +9,8 @@ loudly on its own:
      old workbook. The script resolves the current link from the landing page
      at run time (EXCEL_URL is only the fallback), so the probe checks two
      different things: that the resolved URL still serves a workbook (hard),
-     and that the fallback is still the URL island.is links (degraded — the
-     download works, it just leans on a fallback that is now behind).
+     and that the landing page still links a servable workbook via the script's own
+     discovery (the fallback pin is deliberately not compared: it rotates monthly).
   2. **The Power BI embed.** Report key still published, and the default page
      the script deep-links to (POWERBI_PAGE) still exists in the report.
 
@@ -24,7 +24,6 @@ from datetime import timedelta
 import pytest
 
 from scripts.vinnumalastofnun import (
-    EXCEL_URL,
     LANDING,
     POWERBI_PAGE,
     POWERBI_REPORT_KEY,
@@ -48,24 +47,29 @@ def test_excel_workbook_is_served(http):
     )
 
 
-@pytest.mark.degraded_ok
-def test_hardcoded_excel_url_is_the_current_upload(http):
-    """Degraded, not failed: the script resolves the workbook at run time and
-    only falls back to EXCEL_URL, so a stale fallback changes nothing today.
-    This is the only signal that a new workbook was published and the fallback
-    constant should follow it."""
+def test_landing_page_links_a_servable_workbook(http):
+    """The script's own link discovery must still find a workbook on LANDING,
+    and what it finds must answer 200 with a spreadsheet content type.
+
+    Deliberately does NOT require EXCEL_URL to appear on the page: Contentful
+    rotates the asset URL every month, so pinning it made this probe go red
+    monthly for a fallback that changes nothing at run time. The fallback is
+    refreshed by hand when convenient; what must never break is discovery."""
     r = http.get(LANDING)
     assert r.status_code == 200, f"{r.request.url} -> {r.status_code}"
 
     linked = discover_workbook_urls(r.text)
     assert linked, (
-        f"no .xlsm workbook link on {LANDING} — the page was "
-        f"restructured, or the workbook was removed"
+        f"discover_workbook_urls found no .xlsm workbook link on {LANDING} — the "
+        f"page was restructured (or _ASSET_RE is stale), or the workbook was removed"
     )
-    assert EXCEL_URL in linked, (
-        f"EXCEL_URL in scripts/vinnumalastofnun.py is behind: {LANDING} now "
-        f"links {sorted(linked)} — Contentful rotated the asset URL, update the constant"
-    )
+    for url in sorted(linked):
+        h = http.head(url)
+        assert h.status_code == 200, f"{url} -> {h.status_code}"
+        ctype = h.headers.get("content-type", "")
+        assert ctype.startswith(XLSM_TYPE) or "spreadsheet" in ctype or "excel" in ctype, (
+            f"{url} -> content-type {ctype!r}, not a spreadsheet"
+        )
 
 
 @pytest.fixture(scope="module")

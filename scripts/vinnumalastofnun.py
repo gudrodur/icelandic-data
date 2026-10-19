@@ -35,12 +35,12 @@ POWERBI_PAGE = "ReportSection7e7dca64570c18a74eb9"
 # old workbook rather than 404ing. The workbook is published monthly, so the URL
 # rotates monthly: EXCEL_URL is only the fallback for when LANDING cannot be
 # reached or links no workbook. cmd_excel resolves the current link from LANDING
-# at run time; tests/health/test_vinnumalastofnun.py compares the fallback
-# against the live page and reports degraded when they drift apart.
+# at run time; tests/health/test_vinnumalastofnun.py does NOT pin it: it checks that link
+# discovery still finds a workbook on LANDING and that the link serves one.
 LANDING = "https://island.is/s/vinnumalastofnun/maelabord-og-toelulegar-upplysingar"
 EXCEL_URL = (
-    "https://assets.ctfassets.net/8k0h54kbe6bj/26z9ZjBJAKmHcfdovHQ44w/"
-    "86ec4d861cbde2f764f1f7140cf03e00/Talnagogn_atvinnuleysi_.xlsm"
+    "https://assets.ctfassets.net/8k0h54kbe6bj/6gixO2P4GNuFy7wwTY5ZkE/"
+    "9abbb476210aab3ee0fadffcfda80566/Talnagogn_atvinnuleysi.xlsm"
 )
 
 _ASSET_RE = re.compile(r"https://assets\.ctfassets\.net/[\w/-]+\.xlsm")

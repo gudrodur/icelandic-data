@@ -1,0 +1,90 @@
+name: Source health fallback
+
+# Dead-man's-switch for source-health.yml (issue #15).
+#
+# source-health.yml runs on a self-hosted runner on an Icelandic residential IP
+# (labels: self-hosted, iceland). When that box is offline or busy the job does
+# not fail, it sits queued, and nothing surfaces. This workflow runs on a
+# GitHub-hosted runner ~4h after the main cron and answers one question: did the
+# main workflow run today?
+#
+#   - A run of source-health.yml has COMPLETED today (any conclusion): exit in
+#     seconds. If that run failed, its own failure already alerts.
+#   - Otherwise the Iceland runner never ran today: run the health suite here
+#     (minus the geo-fenced probe) and then fail the job, so the silence breaks.
+
+on:
+  schedule:
+    - cron: "17 10 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: source-health-fallback
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  fallback:
+    name: Fallback probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Did source-health run today?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          today=$(date -u +%F)
+          done_today=$(gh run list --workflow source-health.yml --repo ${{ github.repository }} \
+            --created ">=${today}" --json status,conclusion \
+            --jq '[.[] | select(.status == "completed")] | length')
+          echo "completed runs of source-health.yml since ${today}: ${done_today}"
+          if [ "${done_today}" -gt 0 ]; then
+            echo "ran=true" >> "$GITHUB_OUTPUT"
+            echo "source-health ran today; nothing to do."
+          else
+            echo "ran=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::source-health.yml has not completed a run today"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ran == 'false'
+
+      - name: Install uv
+        if: steps.check.outputs.ran == 'false'
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        if: steps.check.outputs.ran == 'false'
+        run: uv sync --locked
+
+      # Same two lanes as the main workflow, but results are only reported:
+      # the job fails below regardless, for the missing Iceland run. The
+      # samgongustofa probe is deselected because bifreidatolur.samgongustofa.is
+      # times out from Azure datacenter IPs.
+      - name: Required probes
+        if: steps.check.outputs.ran == 'false'
+        continue-on-error: true
+        run: |
+          uv run pytest -m "health and not degraded_ok" \
+            --deselect tests/health/test_samgongustofa.py
+
+      - name: Degraded probes
+        if: steps.check.outputs.ran == 'false'
+        continue-on-error: true
+        run: |
+          uv run pytest -m "health and degraded_ok" \
+            --deselect tests/health/test_samgongustofa.py
+
+      - name: Fail loudly
+        if: steps.check.outputs.ran == 'false'
+        run: |
+          echo "::error::Iceland self-hosted runner did not run source-health today"
+          exit 1

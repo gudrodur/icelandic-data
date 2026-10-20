@@ -8,8 +8,10 @@ name: Source health fallback
 # GitHub-hosted runner ~4h after the main cron and answers one question: did the
 # main workflow run today?
 #
-#   - A run of source-health.yml has COMPLETED today (any conclusion): exit in
-#     seconds. If that run failed, its own failure already alerts.
+#   - A run of source-health.yml EXECUTED its checks today (conclusion success
+#     or failure): exit in seconds. If that run failed, its own failure already
+#     alerts. A cancelled run (the main workflow cancels superseded runs) is
+#     also "completed" but ran no checks, so it does not count.
 #   - Otherwise the Iceland runner never ran today: run the health suite here
 #     (minus the geo-fenced probe) and then fail the job, so the silence breaks.
 
@@ -41,14 +43,14 @@ jobs:
           today=$(date -u +%F)
           done_today=$(gh run list --workflow source-health.yml --repo ${{ github.repository }} \
             --created ">=${today}" --json status,conclusion \
-            --jq '[.[] | select(.status == "completed")] | length')
-          echo "completed runs of source-health.yml since ${today}: ${done_today}"
+            --jq '[.[] | select(.status == "completed" and (.conclusion == "success" or .conclusion == "failure"))] | length')
+          echo "executed runs of source-health.yml since ${today}: ${done_today}"
           if [ "${done_today}" -gt 0 ]; then
             echo "ran=true" >> "$GITHUB_OUTPUT"
             echo "source-health ran today; nothing to do."
           else
             echo "ran=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::source-health.yml has not completed a run today"
+            echo "::warning::source-health.yml has not executed a health check today"
           fi
 
       - uses: actions/checkout@v4

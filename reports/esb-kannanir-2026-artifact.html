@@ -1,0 +1,477 @@
+<title>ESB-kannanir 2026: Naumt en stöðugt já</title>
+<style>
+  :root {
+    --bg: #F5F7F9; --card: #FFFFFF; --ink: #1B2733; --muted: #5A6B7A;
+    --line: #DDE4EA; --grid: #E8EDF1; --ja: #3B77C2; --nei: #C25E33;
+    --ja-soft: rgba(59,119,194,.10); --nei-soft: rgba(194,94,51,.10);
+    --chip: #EDF1F5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161D; --card: #1A222B; --ink: #E8EDF2; --muted: #93A3B1;
+      --line: #2A3540; --grid: #232E39; --ja: #5E95D6; --nei: #CC7B4C;
+      --ja-soft: rgba(94,149,214,.14); --nei-soft: rgba(204,123,76,.14);
+      --chip: #232E39;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F7F9; --card: #FFFFFF; --ink: #1B2733; --muted: #5A6B7A;
+    --line: #DDE4EA; --grid: #E8EDF1; --ja: #3B77C2; --nei: #C25E33;
+    --ja-soft: rgba(59,119,194,.10); --nei-soft: rgba(194,94,51,.10);
+    --chip: #EDF1F5;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161D; --card: #1A222B; --ink: #E8EDF2; --muted: #93A3B1;
+    --line: #2A3540; --grid: #232E39; --ja: #5E95D6; --nei: #CC7B4C;
+    --ja-soft: rgba(94,149,214,.14); --nei-soft: rgba(204,123,76,.14);
+    --chip: #232E39;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0; padding: 0 20px 80px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1, h2, .stand {
+    font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  h1 { font-size: clamp(2.1rem, 6vw, 3.2rem); line-height: 1.12; margin: .3em 0 .25em; text-wrap: balance; font-weight: 700; }
+  h2 { font-size: 1.45rem; line-height: 1.25; margin: 0 0 .2em; text-wrap: balance; }
+  .eyebrow {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .74rem;
+    color: var(--muted); font-weight: 600; margin-top: 48px;
+  }
+  .stand { font-size: 1.18rem; line-height: 1.55; color: var(--ink); max-width: 60ch; margin: 0 0 14px; }
+  .countchip {
+    display: inline-flex; align-items: baseline; gap: .45em;
+    background: var(--ja-soft); border: 1px solid var(--ja);
+    color: var(--ink); border-radius: 999px; padding: 5px 14px;
+    font-size: .88rem; font-weight: 600;
+  }
+  .countchip strong { font-variant-numeric: tabular-nums; color: var(--ja); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 30px 0 8px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 12px; }
+  .tile .num { font-size: 1.9rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .tile .num.ja { color: var(--ja); } .tile .num.nei { color: var(--nei); }
+  .tile .lbl { font-size: .8rem; color: var(--muted); line-height: 1.4; margin-top: 3px; }
+
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px 18px; margin: 26px 0; }
+  .sub { color: var(--muted); font-size: .88rem; margin: 0 0 14px; max-width: 66ch; }
+  .legend { display: flex; gap: 18px; font-size: .82rem; color: var(--muted); margin: 2px 0 6px; }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .chart-box { position: relative; }
+  .chart-box svg { width: 100%; height: auto; display: block; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .12s;
+    background: var(--ink); color: var(--bg); font-size: .78rem; line-height: 1.45;
+    border-radius: 7px; padding: 7px 10px; max-width: 240px; z-index: 5;
+    transform: translate(-50%, calc(-100% - 12px));
+  }
+  @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+  .tip strong { font-variant-numeric: tabular-nums; }
+  .foot-note { font-size: .78rem; color: var(--muted); margin-top: 10px; }
+
+  .framings { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 26px 0; }
+  .framing { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; border-top: 3px solid var(--line); }
+  .framing.f-nei { border-top-color: var(--nei); }
+  .framing.f-ja { border-top-color: var(--ja); }
+  .framing h3 { margin: 0 0 6px; font-size: .98rem; }
+  .framing p { margin: 0; font-size: .85rem; color: var(--muted); line-height: 1.55; }
+  .framing .trend { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.05rem; margin: 8px 0 0; }
+  .framing .trend.ja { color: var(--ja); } .framing .trend.nei { color: var(--nei); }
+
+  .bars .row { display: grid; grid-template-columns: 200px 1fr 52px; gap: 12px; align-items: center; margin: 10px 0; font-size: .88rem; }
+  .bars .track { background: var(--grid); border-radius: 4px; height: 18px; position: relative; }
+  .bars .fill { background: var(--nei); height: 100%; border-radius: 4px 3px 3px 4px; }
+  .bars .val { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--nei); text-align: right; }
+  @media (max-width: 560px) { .bars .row { grid-template-columns: 1fr 60px; } .bars .track { grid-column: 1 / -1; } }
+
+  .timeline { border-left: 2px solid var(--line); margin: 10px 0 0 6px; padding-left: 22px; }
+  .month { margin: 26px 0 14px; }
+  .month > .mh {
+    font-family: Georgia, serif; font-size: 1.1rem; font-weight: 700; position: relative;
+  }
+  .month > .mh::before {
+    content: ""; position: absolute; left: -28.5px; top: .38em;
+    width: 11px; height: 11px; border-radius: 50%; background: var(--ink); border: 2px solid var(--bg);
+  }
+  .month > .story { font-size: .92rem; color: var(--muted); max-width: 62ch; margin: 4px 0 12px; }
+  .poll { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 11px 14px; margin: 8px 0; font-size: .88rem; }
+  .poll .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .poll .date { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .8rem; }
+  .poll .who { font-weight: 600; }
+  .poll .chip {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
+    background: var(--chip); color: var(--muted); border-radius: 999px; padding: 2px 9px; font-weight: 600;
+  }
+  .poll .res { margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .poll .res b.ja { color: var(--ja); } .poll .res b.nei { color: var(--nei); }
+  .poll a { color: var(--muted); font-size: .78rem; text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  .poll a:hover, .poll a:focus-visible { color: var(--ink); border-bottom-style: solid; }
+
+  table { border-collapse: collapse; width: 100%; font-size: .82rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { text-transform: uppercase; font-size: .68rem; letter-spacing: .08em; color: var(--muted); }
+  td.n, th.n { text-align: right; }
+  .table-scroll { overflow-x: auto; }
+  .method { font-size: .82rem; color: var(--muted); max-width: 68ch; line-height: 1.6; }
+  .method a { color: inherit; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--ja); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Skoðanakannanir · Evrópusambandið · 2026</p>
+  <h1>Naumt en stöðugt já</h1>
+  <p class="stand">Fjórtán kannanir á átta mánuðum draga upp þrjár ólíkar myndir fyrir
+  þjóðaratkvæðagreiðsluna 29. ágúst: þjóðin er andvíg aðild, hlynnt viðræðum, og á
+  kjörseðilsspurningunni sjálfri hefur naumur meirihluti sagt já í hverri einustu mælingu.
+  Í ágúst er forskotið komið niður fyrir vikmörk.</p>
+  <p><span class="countchip" id="countdown">Þjóðaratkvæðagreiðsla 29. ágúst 2026</span></p>
+
+  <div class="tiles">
+    <div class="tile"><div class="num ja">51,5%</div><div class="lbl">segðu já í nýjustu mælingu (Gallup, Þjóðarpúls, 14. ágúst)</div></div>
+    <div class="tile"><div class="num ja">6 af 6</div><div class="lbl">beinum mælingum á atkvæðinu hafa endað já-megin</div></div>
+    <div class="tile"><div class="num nei">47%</div><div class="lbl">andvíg aðild sjálfri (Gallup fyrir Viðskiptablaðið, júní)</div></div>
+    <div class="tile"><div class="num nei">66%</div><div class="lbl">aðildarfyrirtækja SA andvíg aðild (júlí)</div></div>
+  </div>
+
+  <section class="card">
+    <h2>Atkvæðið: já-hliðin hefur haldið forystu allt árið</h2>
+    <p class="sub">Allar beinar mælingar á kjörseðilsspurningunni, hlutfall þeirra sem taka
+    afstöðu. Sex mælingar frá janúar til ágúst: 53, 52, 52, 53, 52,2 og 51,5.</p>
+    <div class="legend">
+      <span class="key"><span class="dot" style="background:var(--ja)"></span>Já / með viðræðum</span>
+      <span class="key"><span class="dot" style="background:var(--nei)"></span>Nei / á móti</span>
+    </div>
+    <div class="chart-box" id="chartA"></div>
+    <p class="foot-note">Janúarmælingin var gerð áður en kjördagur var ákveðinn, með sama
+    atkvæðaorðalagi. Óákveðin (8 til 17%) eru utan sviga í þeim öllum. Gallup-könnunin sem
+    Áfram Ísland pantaði, 46 á móti 46 í ágúst, er ekki á þessari línu: hún er birt af öllum
+    svarendum en ekki af þeim sem taka afstöðu. Hún er í töflunni að neðan.</p>
+  </section>
+
+  <section class="card">
+    <h2>Aðildin sjálf mælist á sama tíma nei-megin</h2>
+    <p class="sub">„Ert þú hlynnt(ur) eða andvíg(ur) því að Ísland gangi í ESB?", hlutfall
+    allra svarenda hjá Gallup. Demanturinn er stök mæling Maskínu á sömu spurningu.</p>
+    <div class="legend">
+      <span class="key"><span class="dot" style="background:var(--ja)"></span>Hlynnt aðild</span>
+      <span class="key"><span class="dot" style="background:var(--nei)"></span>Andvíg aðild</span>
+    </div>
+    <div class="chart-box" id="chartB"></div>
+    <p class="foot-note">Afgangurinn, 11 til 16%, svarar hvorki né. Andvígum fjölgaði um sex
+    prósentustig milli ára í febrúarmælingunni.</p>
+  </section>
+
+  <div class="framings">
+    <div class="framing f-nei">
+      <h3>Aðild sjálf</h3>
+      <p>„Á Ísland að ganga í ESB?" Nei-megin í öllum fjórum mælingum ársins, og andstaðan
+      óx frá febrúar fram í júní.</p>
+      <p class="trend nei">42/42 → 39/47</p>
+    </div>
+    <div class="framing f-ja">
+      <h3>Aðildarviðræður</h3>
+      <p>Almenn afstaða til þess að viðræður verði teknar upp á ný. Já-megin í öllum
+      mælingum Maskínu, 53,1% á móti 46,9% af þeim sem taka afstöðu í júní.</p>
+      <p class="trend ja">53 → 53,1</p>
+    </div>
+    <div class="framing f-ja">
+      <h3>Atkvæðið 29. ágúst</h3>
+      <p>Kjörseðilsspurningin sjálf. Já-hliðin hefur mælst hærri í hverri einustu beinni
+      mælingu, en forskotið mjókkar: 51,5 á móti 48,5 í ágúst, innan vikmarka.</p>
+      <p class="trend ja">53 · 52 · 52 · 53 · 52,2 · 51,5</p>
+    </div>
+  </div>
+
+  <section class="card bars">
+    <h2>Atvinnulífið sker sig úr</h2>
+    <p class="sub">Tvær hagsmunakannanir, hvorug þjóðarúrtak: andstaðan er mun dýpri en hjá
+    þjóðinni og hún harðnar.</p>
+    <div class="row">
+      <span>Félagsmenn SI (mars)</span>
+      <div class="track"><div class="fill" style="width:57%"></div></div>
+      <span class="val">57%</span>
+    </div>
+    <div class="row">
+      <span>Aðildarfyrirtæki SA (júlí)</span>
+      <div class="track"><div class="fill" style="width:66%"></div></div>
+      <span class="val">66%</span>
+    </div>
+    <p class="foot-note">Hlutfall andvígra aðild. Hjá SI voru 43% mjög andvíg, tæplega tvöfalt
+    fleiri en 2024; hlynntum fækkaði úr 37% í um 25%.</p>
+  </section>
+
+  <p class="eyebrow" style="margin-top:54px">Sagan, mánuð fyrir mánuð</p>
+  <h2 style="margin-bottom:18px">Frá Kryddsíld að kjördegi</h2>
+
+  <div class="timeline" id="timeline"></div>
+
+  <section class="card">
+    <h2>Allar mælingar ársins</h2>
+    <p class="sub">Hver tala handstaðfest gegn frumtexta greinarinnar, 1. ágúst og 19. ágúst 2026.</p>
+    <div class="table-scroll">
+      <table id="polltable">
+        <thead><tr>
+          <th>Birt</th><th>Könnun</th><th>Spurning</th>
+          <th class="n">Já/Hlynnt</th><th class="n">Nei/Andvígt</th><th class="n">Óákv.</th>
+          <th>Grunnur</th><th class="n">n</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Aðferð og heimildir</h2>
+    <p class="method">Gögnunum var safnað 1. ágúst 2026 og þau uppfærð 19. ágúst með tveimur gagnaverkfærum úr
+    icelandic-data safninu: Maskínu-skillinu (WordPress-vefþjónusta og Tableau-mælaborð
+    beint frá könnunarfyrirtækinu) og skodanakannanir-skillinu (fréttaumfjöllun RÚV, Vísis
+    og Heimildarinnar um kannanir allra fyrirtækja). Hver einasta tala var síðan handstaðfest
+    gegn frumtexta greinarinnar; sjálfvirkar úrdráttarvillur fundust og voru leiðréttar
+    í verkfærunum sjálfum. Ágústkönnun Gallup er dæmi um það: úrdrátturinn skilaði 48,5 báðum
+    megin, en frumtextinn segir 51,5 á móti 48,5. Orsökin var sú að setningin notar orðin
+    „atkvæði með" og „á móti" en hvorki já né nei, svo aðeins annar helmingurinn þekktist og
+    talan næst honum var valin. Könnun Gallup fyrir Áfram Ísland fannst hvorugu megin
+    sjálfkrafa: RÚV merkti fréttina ekki sem skoðanakönnun, svo leitin sér hana ekki, og
+    Vísir orðar niðurstöðuna sem eina tölu yfir tvö svör. Hún var lesin inn í höndunum.
+    Sú könnun var pöntuð af samtökum sem berjast fyrir nei-i, og hún telur alla svarendur en
+    ekki aðeins þau sem taka afstöðu. Hvort tveggja á heima í hverri tilvitnun.
+    Já/nei-tölur miðast við þau sem taka afstöðu nema annað sé merkt;
+    aðildartölur Gallup miðast við öll svör. Spurningarnar þrjár mælast kerfisbundið ólíkt
+    og eru ekki samanburðarhæfar sín á milli. Frumheimildir eru tengdar við hverja könnun
+    í tímalínunni að ofan.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* Icelandic thousands separator, done by hand: toLocaleString("is-IS")
+     falls back to the English comma wherever that locale's data is absent,
+     and the artifact viewer is not guaranteed to carry it. */
+  function thous(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+
+  /* ---------- data ---------- */
+  var POLLS = [
+    { d: "2026-01-12", doy: 11,  who: "Maskína fyrir Sýn (Kryddsíld)", framing: "Atkvæðið", ja: 53, nei: 47, oakv: null, basis: "afstöðu tekið", n: 1765,
+      url: "https://maskina.is/53-hlynnt-aframhaldandi-adildarvidraedum-vid-esb/",
+      story: null },
+    { d: "2026-02-04", doy: 34,  who: "Gallup, Þjóðarpúls", framing: "Aðild", ja: 42, nei: 42, oakv: 16, basis: "öll svör", n: 1672,
+      url: "https://www.visir.is/g/20262838574d/thjodin-klofin-gagnvart-esb-og-fylgi-vid-nato-a-hreyfingu" },
+    { d: "2026-03-09", doy: 67,  who: "Gallup, Þjóðarpúls", framing: "Atkvæðið", ja: 52, nei: 48, oakv: null, basis: "ótilgreint", n: 800,
+      url: "https://www.visir.is/g/20262853438d/thridjungur-andvigur-atkvaedagreidslunni" },
+    { d: "2026-03-09", doy: 67,  who: "Gallup, Þjóðarpúls", framing: "Atkvæðagreiðslan", ja: 58, nei: 30, oakv: 12, basis: "öll svör", n: 800,
+      url: "https://www.visir.is/g/20262853438d/thridjungur-andvigur-atkvaedagreidslunni" },
+    { d: "2026-03-09", doy: 67,  who: "Könnun meðal félagsmanna SI", framing: "Hagsmunir", ja: 25, nei: 57, oakv: null, basis: "öll svör", n: null,
+      url: "https://www.visir.is/g/20262853308d/idnadurinn-forherdist-i-andstodu-gegn-esb" },
+    { d: "2026-04-07", doy: 96,  who: "Gallup fyrir Viðskiptablaðið", framing: "Aðild", ja: 40, nei: 47, oakv: 13, basis: "öll svör", n: null,
+      url: "https://www.visir.is/g/20262866089d/meirihluti-theirra-sem-taka-afstodu-andvig-adild-ad-esb" },
+    { d: "2026-04-15", doy: 104, who: "Maskína", framing: "Aðild", ja: null, nei: 46, oakv: null, basis: "ótilgreint", n: null,
+      url: "https://www.visir.is/g/20262869821d/fleiri-andvigir-adild-nu-en-i-fyrra" },
+    { d: "2026-06-10", doy: 160, who: "Gallup fyrir Viðskiptablaðið", framing: "Aðild", ja: 39, nei: 47, oakv: 13, basis: "öll svör", n: null,
+      url: "https://www.visir.is/g/20262895588d/fleiri-andvigir-inngongu-i-esb" },
+    { d: "2026-06-13", doy: 163, who: "Maskína fyrir DV", framing: "Viðræður", ja: 53.1, nei: 46.9, oakv: 14.6, basis: "afstöðu tekið", n: 1856,
+      url: "https://www.visir.is/g/20262897210d/fleiri-hlynntir-en-andvigir-samkvaemt-nyrri-konnun" },
+    { d: "2026-06-27", doy: 177, who: "Gallup, Þjóðarpúls", framing: "Atkvæðið", ja: 52, nei: 48, oakv: null, basis: "ótilgreint", n: 1993,
+      url: "https://www.visir.is/g/20262902621d/rett-rumur-helmingur-myndi-segja-ja-i-agust" },
+    { d: "2026-07-28", doy: 208, who: "Gallup fyrir SA", framing: "Hagsmunir", ja: null, nei: 66, oakv: null, basis: "öll svör", n: null,
+      url: "https://www.visir.is/g/20262914497d/meirihluti-adildarfyrirtaekjanna-andvigur" },
+    { d: "2026-07-30", doy: 210, who: "Maskína fyrir DV", framing: "Atkvæðið", ja: 53, nei: 47, oakv: 13.5, basis: "afstöðu tekið", n: null,
+      url: "https://www.visir.is/g/20262915377d/meirihluti-aetlar-ad-segja-ja-i-agust" },
+    { d: "2026-08-06", doy: 217, who: "Gallup fyrir Áfram Ísland", framing: "Atkvæðið, öll svör", ja: 46, nei: 46, oakv: 8, basis: "öll svör", n: 1996,
+      url: "https://www.ruv.is/frettir/innlent/2026-08-06-hnifjafnt-milli-fylkinga-483052" },
+    { d: "2026-08-13", doy: 224, who: "Maskína", framing: "Atkvæðið", ja: 52.2, nei: 47.8, oakv: 13.1, basis: "afstöðu tekið", n: null,
+      url: "https://www.visir.is/g/20262920711d/forskot-ja-hlidarinnar-maelist-minna" },
+    { d: "2026-08-14", doy: 225, who: "Gallup, Þjóðarpúls", framing: "Atkvæðið", ja: 51.5, nei: 48.5, oakv: 8, basis: "afstöðu tekið", n: 4128,
+      url: "https://www.ruv.is/frettir/innlent/2026-08-14-nyr-thjodarpuls-ekki-marktaekur-munur-a-fylkingum-483977" }
+  ];
+
+  var MONTHS = [
+    { name: "Janúar", story: "Árið byrjar já-megin. Kryddsíldarkönnun Maskínu sýnir 53% með áframhaldandi viðræðum, tveimur prósentustigum meira en ári fyrr." },
+    { name: "Febrúar", story: "Gallup sýnir þjóðina klofna um aðildina sjálfa, 42% á móti 42%. Í sömu könnun styðja 78% NATO-aðild, allt önnur staða en í ESB-málinu." },
+    { name: "Mars", story: "Þrjár mælingar á einum degi: meirihluti styður að atkvæðagreiðslan fari fram (58/30), naumur meirihluti myndi kjósa með (52/48), en iðnaðurinn harðnar í andstöðu." },
+    { name: "Apríl", story: "Andstaðan við aðild vex. Gallup mælir 47% andvíg og Maskína 46%, upp úr 39,8% ári fyrr. Á brattann að sækja fyrir aðildarsinna, skrifar Vísir." },
+    { name: "Júní", story: "Þrjár mælingar á þremur vikum draga upp alla þversögnina: aðild enn nei-megin (39/47), viðræður já-megin (53,1/46,9) og atkvæðið naumt já (52/48)." },
+    { name: "Júlí", story: "Lokasprettur. SA-fyrirtækin leggjast gegn aðild (66%) en þjóðin heldur naumu já-i á kjörseðilsspurningunni, 53/47, mánuði fyrir kjördag." },
+    { name: "Ágúst", story: "Bilið mjókkar á lokametrunum. Maskína mælir forskot já-hliðarinnar 4,4 stig, niður úr 6,2 í júní, og Gallup fær 51,5 á móti 48,5 með 2,5 stiga vikmörkum. Munurinn er ekki lengur tölfræðilega marktækur, svo kjörsóknin ræður úrslitum. Þriðja ágústmælingin, Gallup-könnun sem Áfram Ísland pantaði, sýnir 46 á móti 46. Sú tala er af öllum svarendum, óákveðnum meðtöldum, og því ekki á sama grunni og hinar tvær." }
+  ];
+  var monthOf = { "01": 0, "02": 1, "03": 2, "04": 3, "06": 4, "07": 5, "08": 6 };
+
+  /* ---------- countdown ---------- */
+  (function () {
+    var el = document.getElementById("countdown");
+    var days = Math.ceil((new Date(2026, 7, 29) - new Date()) / 86400000);
+    if (days > 1) el.innerHTML = "<strong>" + days + " dagar</strong> í þjóðaratkvæðagreiðsluna 29. ágúst";
+    else if (days === 1) el.innerHTML = "<strong>Kosið á morgun</strong>, 29. ágúst";
+    else if (days === 0) el.innerHTML = "<strong>Kjördagur er í dag</strong>";
+    else el.innerHTML = "Þjóðaratkvæðagreiðslan fór fram <strong>29. ágúst 2026</strong>";
+  })();
+
+  /* ---------- chart renderer ---------- */
+  var MONTH_TICKS = [
+    [0, "jan"], [31, "feb"], [59, "mar"], [90, "apr"], [120, "maí"],
+    [151, "jún"], [181, "júl"], [212, "ágú"]
+  ];
+  var KJORDAGUR = 240; /* 29. ágúst */
+
+  function fmt(v) { return String(v).replace(".", ","); }
+
+  function renderChart(mount, cfg) {
+    var W = 760, H = 320, L = 44, R = 24, T = 18, B = 34;
+    var x0 = 0, x1 = 252;
+    var css = getComputedStyle(document.documentElement);
+    function X(d) { return L + (d - x0) / (x1 - x0) * (W - L - R); }
+    function Y(v) { return T + (cfg.yMax - v) / (cfg.yMax - cfg.yMin) * (H - T - B); }
+
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + cfg.aria + '">');
+
+    /* grid + y labels */
+    for (var g = cfg.yMin; g <= cfg.yMax; g += cfg.yStep) {
+      var strong = g === 50 && cfg.fiftyLine;
+      s.push('<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(g) + '" y2="' + Y(g) +
+        '" stroke="var(--grid)" stroke-width="' + (strong ? 1.6 : 1) + '"' +
+        (strong ? ' stroke-dasharray="none" stroke="var(--muted)" opacity=".55"' : "") + " />");
+      s.push('<text x="' + (L - 8) + '" y="' + (Y(g) + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)">' + g + "%</text>");
+    }
+    /* x ticks */
+    MONTH_TICKS.forEach(function (t) {
+      s.push('<text x="' + X(t[0]) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="11" fill="var(--muted)">' + t[1] + "</text>");
+    });
+    /* kjördagur marker */
+    s.push('<line x1="' + X(KJORDAGUR) + '" x2="' + X(KJORDAGUR) + '" y1="' + T + '" y2="' + (H - B) +
+      '" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="4 4" opacity=".7" />');
+    s.push('<text x="' + X(KJORDAGUR) + '" y="' + (T - 4) + '" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-weight="600">kjördagur</text>');
+
+    /* series */
+    cfg.series.forEach(function (ser) {
+      var pts = ser.pts;
+      if (pts.length > 1) {
+        var dstr = pts.map(function (p, i) { return (i ? "L" : "M") + X(p.doy) + " " + Y(p.v); }).join(" ");
+        s.push('<path d="' + dstr + '" fill="none" stroke="var(' + ser.color + ')" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />');
+      }
+      pts.forEach(function (p) {
+        if (p.shape === "diamond") {
+          var x = X(p.doy), y = Y(p.v), r = 5.5;
+          s.push('<path d="M' + x + " " + (y - r) + "L" + (x + r) + " " + y + "L" + x + " " + (y + r) + "L" + (x - r) + " " + y +
+            'Z" fill="var(' + ser.color + ')" stroke="var(--card)" stroke-width="2" />');
+        } else {
+          s.push('<circle cx="' + X(p.doy) + '" cy="' + Y(p.v) + '" r="4.5" fill="var(' + ser.color + ')" stroke="var(--card)" stroke-width="2" />');
+        }
+      });
+      /* direct label + endpoint value at last point */
+      var lp = pts[pts.length - 1];
+      s.push('<text x="' + (X(lp.doy) + 10) + '" y="' + (Y(lp.v) + 4) + '" font-size="12" font-weight="700" fill="var(' + ser.color + ')">' +
+        fmt(lp.v) + "% " + ser.label + "</text>");
+    });
+
+    /* invisible hit targets, drawn last */
+    var hits = [];
+    cfg.series.forEach(function (ser, si) {
+      ser.pts.forEach(function (p, pi) {
+        hits.push('<circle cx="' + X(p.doy) + '" cy="' + Y(p.v) + '" r="15" fill="transparent" data-s="' + si + '" data-p="' + pi + '" />');
+      });
+    });
+    s.push(hits.join(""));
+    s.push("</svg>");
+    s.push('<div class="tip" role="status"></div>');
+    mount.innerHTML = s.join("");
+
+    var tip = mount.querySelector(".tip");
+    mount.querySelectorAll("circle[data-s]").forEach(function (c) {
+      function show() {
+        var ser = cfg.series[+c.dataset.s], p = ser.pts[+c.dataset.p];
+        tip.innerHTML = p.tip;
+        var bb = mount.getBoundingClientRect();
+        var scale = bb.width / W;
+        tip.style.left = (+c.getAttribute("cx")) * scale + "px";
+        tip.style.top = (+c.getAttribute("cy")) * scale + "px";
+        tip.style.opacity = 1;
+      }
+      c.addEventListener("mouseenter", show);
+      c.addEventListener("mouseleave", function () { tip.style.opacity = 0; });
+      c.addEventListener("touchstart", function (e) { show(); e.preventDefault(); }, { passive: false });
+    });
+  }
+
+  function tipFor(p, jaLabel, neiLabel) {
+    var lines = [p.d.split("-").reverse().join(".").replace(/^0/, "") + " · " + p.who];
+    var vals = [];
+    if (p.ja != null) vals.push(jaLabel + " <strong>" + fmt(p.ja) + "%</strong>");
+    if (p.nei != null) vals.push(neiLabel + " <strong>" + fmt(p.nei) + "%</strong>");
+    lines.push(vals.join(" · "));
+    var meta = [p.basis];
+    if (p.n) meta.push("n=" + thous(p.n));
+    lines.push(meta.join(" · "));
+    return lines.join("<br>");
+  }
+
+  /* chart A: atkvæðið */
+  var votes = POLLS.filter(function (p) { return p.framing === "Atkvæðið"; });
+  renderChart(document.getElementById("chartA"), {
+    yMin: 40, yMax: 60, yStep: 5, fiftyLine: true,
+    aria: "Sex mælingar á atkvæðinu: já 53, 52, 52, 53, 52,2 og 51,5 prósent; nei 47, 48, 48, 47, 47,8 og 48,5 prósent",
+    series: [
+      { color: "--ja", label: "já", pts: votes.map(function (p) { return { doy: p.doy, v: p.ja, tip: tipFor(p, "Já", "Nei") }; }) },
+      { color: "--nei", label: "nei", pts: votes.map(function (p) { return { doy: p.doy, v: p.nei, tip: tipFor(p, "Já", "Nei") }; }) }
+    ]
+  });
+
+  /* chart B: aðildin */
+  var memb = POLLS.filter(function (p) { return p.framing === "Aðild" && p.who.indexOf("Gallup") === 0; });
+  var mask = POLLS.filter(function (p) { return p.framing === "Aðild" && p.who === "Maskína"; })[0];
+  renderChart(document.getElementById("chartB"), {
+    yMin: 30, yMax: 55, yStep: 5, fiftyLine: false,
+    aria: "Aðild að ESB hjá Gallup: hlynnt 42, 40, 39 prósent; andvíg 42, 47, 47 prósent. Maskína í apríl: andvíg 46 prósent",
+    series: [
+      { color: "--ja", label: "hlynnt", pts: memb.map(function (p) { return { doy: p.doy, v: p.ja, tip: tipFor(p, "Hlynnt", "Andvígt") }; }) },
+      { color: "--nei", label: "andvíg", pts: memb.map(function (p) { return { doy: p.doy, v: p.nei, tip: tipFor(p, "Hlynnt", "Andvígt") }; }) },
+      { color: "--nei", label: "Maskína", pts: [{ doy: mask.doy, v: mask.nei, shape: "diamond", tip: tipFor(mask, "Hlynnt", "Andvígt") }] }
+    ]
+  });
+
+  /* ---------- timeline ---------- */
+  var tl = document.getElementById("timeline");
+  var html = [];
+  MONTHS.forEach(function (m, mi) {
+    html.push('<div class="month"><div class="mh">' + m.name + '</div><p class="story">' + m.story + "</p>");
+    POLLS.filter(function (p) { return monthOf[p.d.slice(5, 7)] === mi; }).forEach(function (p) {
+      var res = [];
+      var ballot = p.framing.indexOf("Atkvæðið") === 0;
+      if (p.ja != null) res.push('<b class="ja">' + fmt(p.ja) + "%</b> " + (ballot ? "já" : "hlynnt"));
+      if (p.nei != null) res.push('<b class="nei">' + fmt(p.nei) + "%</b> " + (ballot ? "nei" : "andvíg"));
+      if (p.oakv != null) res.push(fmt(p.oakv) + "% óákveðin");
+      html.push('<div class="poll"><div class="top">' +
+        '<span class="date">' + p.d.slice(8, 10).replace(/^0/, "") + "." + p.d.slice(5, 7).replace(/^0/, "") + ".</span>" +
+        '<span class="who">' + p.who + "</span>" +
+        '<span class="chip">' + p.framing + "</span></div>" +
+        '<div class="res">' + res.join(" · ") + " <span style='color:var(--muted)'>(" + p.basis + ")</span></div>" +
+        '<a href="' + p.url + '" target="_blank" rel="noopener">frumheimild ↗</a></div>');
+    });
+    html.push("</div>");
+  });
+  tl.innerHTML = html.join("");
+
+  /* ---------- table ---------- */
+  var tb = document.querySelector("#polltable tbody");
+  tb.innerHTML = POLLS.map(function (p) {
+    return "<tr><td>" + p.d.slice(8, 10) + "." + p.d.slice(5, 7) + ".</td><td>" + p.who + "</td><td>" + p.framing +
+      '</td><td class="n">' + (p.ja != null ? fmt(p.ja) : "·") +
+      '</td><td class="n">' + (p.nei != null ? fmt(p.nei) : "·") +
+      '</td><td class="n">' + (p.oakv != null ? fmt(p.oakv) : "·") +
+      "</td><td>" + p.basis + '</td><td class="n">' + (p.n ? thous(p.n) : "·") + "</td></tr>";
+  }).join("");
+})();
+</script>

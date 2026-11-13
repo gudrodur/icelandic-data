@@ -1,0 +1,549 @@
+# Icelandic Data Toolkit
+
+Data toolkit for Icelandic public data. Each skill in `.agents/skills/` documents one data source — API endpoints, series codes, encoding quirks, classification changes. Scripts in `scripts/` fetch, clean, and transform the data.
+
+## Architecture
+
+```
+/.agents/skills/{source}/SKILL.md   # Data source docs (API, endpoints, caveats)
+/scripts/{source}.py                # Fetch + transform scripts (uv project)
+/tests/health/test_{source}.py      # Upstream health probe (marker: health)
+/data/
+  /raw/{source}/                    # Raw downloads (Excel, CSV, JSON)
+  /processed/                       # Cleaned datasets
+```
+
+Skills follow the [agentskills.io](https://agentskills.io) open standard, so the same
+`SKILL.md` files work in both Claude Code and Codex:
+
+- `.agents/skills/` is the real location — read natively by Codex.
+- `.claude/skills` is a symlink to it, so Claude Code discovers the same files.
+- `CLAUDE.md` is a symlink to `AGENTS.md`, so both agents read these instructions.
+
+Skill names must be lowercase, ASCII, hyphen-separated (no underscores, no `ð`/`æ`).
+
+## Skills
+
+Each skill documents ONE data source:
+- API endpoints and authentication
+- Available series and their scope
+- Tariff codes, variable mappings, classification changes
+- Example fetch commands
+- Known caveats (encoding, date ranges, schema changes)
+
+There is deliberately no index of skills here. Each `SKILL.md` carries a `description`
+in its frontmatter, and that description is what both agents preload and match against —
+a table in this file would be a second, staler copy that cannot trigger anything.
+Run `ls .agents/skills/` to enumerate them.
+
+Keep each `description` under ~160 characters: Codex truncates when all descriptions
+combined exceed 8,000 characters, and with <!-- live:skill-count -->58<!-- /live --> skills that budget is the binding constraint.
+
+**When asked about a new data source:** follow the `new-data-source` skill.
+
+## HTML Reports
+
+When asked for a report, produce a **single self-contained `.html` file** in `/reports/`:
+- Embed data as JSON in `<script>` tags
+- Use Chart.js (CDN) — `<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>`
+- No build step, no dependencies
+
+Style: system fonts, max-width `960px`, cards with `border-radius: 12px`, Chart.js in `.chart-wrap` at `height: 360px`.
+
+## Adding a New Data Source
+
+Follow the methodology in the `new-data-source` skill — covers discovery, probing, skill authoring, script conventions, health probes, testing, and visualization. Scripts must also follow `docs/python-scripting-gold-standard.md` (CLI, httpx, polars, paths, encoding, probes). Summary:
+
+1. **Discover** — find the API type (REST, WFS, Power BI, scraping), probe endpoints, document schema
+2. **Skill** — create `.agents/skills/{source}/SKILL.md` with frontmatter, API, schema, request examples, caveats
+3. **Script** — create `scripts/{source}.py` with `list`/`fetch` subcommands (polars + httpx)
+4. **Test** — verify output with DuckDB, check Icelandic encoding, spot-check values
+5. **Health probe** — add `tests/health/test_{source}.py` so upstream breakage surfaces on its own
+6. **Visualize** — HTML report (Chart.js/Leaflet) or static map (geopandas + cached LMI layers)
+7. **Register** — add a Quick Command below (the skill's `description` is its own index entry)
+
+## Tools
+
+Installed via `./setup.sh`:
+- `jq` - JSON processing
+- `duckdb` - SQL on local files
+- `uv` - Python package manager
+
+Python (managed by `uv`):
+- `polars` - Fast DataFrame library
+- `openpyxl` - Excel file reading
+- `httpx` - HTTP client
+- `playwright` - Headless browser automation (for skatturinn.is)
+- `pdfplumber` - PDF text/table extraction
+- `docling` - AI-powered PDF extraction with 97.9% table accuracy (IBM)
+- `iceaddr` - Icelandic address geocoding (bundled SQLite from Staðfangaskrá)
+
+## Quick Commands
+
+```bash
+# Process raw data into tidy CSVs
+uv run python scripts/sedlabanki.py
+
+# Fetch CBI FX intervention (net purchases/sales, turnover, reserves, ISK/EUR) -> monthly CSV
+uv run python scripts/sedlabanki_fx.py fetch
+uv run python scripts/sedlabanki_fx.py list
+
+# Currency exchange rates — Borgun card rates (current) + ECB reference rates (historical)
+uv run python scripts/gengi.py USD,EUR --history 6m
+
+# Query processed data
+duckdb -c "SELECT * FROM 'data/processed/*.csv' LIMIT 10"
+
+# Get company info and annual reports list
+uv run python scripts/skatturinn.py info <kennitala>
+
+# Download annual report PDF
+uv run python scripts/skatturinn.py download <kennitala> --year 2024
+
+# Extract financials from PDF (full pipeline)
+uv run python scripts/financials.py company <kennitala> --year 2024
+
+# Extract from local PDF
+uv run python scripts/financials.py extract /path/to/report.pdf
+
+# Eurostat — euro-area / EU statistics (wages, HICP, GDP, unemployment)
+uv run python scripts/eurostat.py list
+uv run python scripts/eurostat.py fetch prc_hicp_midx --filter geo=EA20 --filter coicop=CP00 --filter unit=I15
+uv run python scripts/eurostat.py fetch namq_10_a10 --filter geo=EA20 --filter na_item=D1 --filter s_adj=SCA --filter unit=CP_MEUR --filter nace_r2=TOTAL
+uv run python scripts/eurostat.py fetch namq_10_pe --filter geo=EA20 --filter na_item=EMP_DC --filter s_adj=SCA --filter unit=THS_PER
+
+# Real wage comparison Iceland vs euro area (Chart.js HTML report)
+uv run python reports/real_wages_is_vs_euro.py
+
+# Property price analysis
+duckdb -c "SELECT YEAR(kaupsamningur_dags), median(kaupverd*1000/einflm_m2) FROM 'data/processed/kaupskra_geocoded.parquet' WHERE NOT onothaefur AND tegund='Fjölbýli' GROUP BY 1 ORDER BY 1"
+
+# Geocode an Icelandic address
+uv run python -c "from iceaddr import iceaddr_lookup; print(iceaddr_lookup('Laugavegur', number=22, postcode=101))"
+
+# List Nasdaq Iceland companies
+uv run python scripts/nasdaq.py companies
+
+# Search company announcements (handles Icelandic encoding)
+uv run python scripts/nasdaq.py search --company "Arion banki hf." --category "Ársreikningur"
+
+# Process Gasvaktin fuel prices
+uv run python scripts/fuel.py
+
+# Energy Authority — electricity generation by source (1969–2024)
+uv run python scripts/energy.py list
+uv run python scripts/energy.py fetch
+
+# Hafrannsóknastofnun / MFRI — current cod stock assessment
+uv run python scripts/hafogvatn.py list
+uv run python scripts/hafogvatn.py fetch --stock cod --year 2026
+
+# Fiskistofa — public current fishing closures (open WFS; not paid catch/quota REST)
+uv run python scripts/fiskistofa.py list
+uv run python scripts/fiskistofa.py fetch
+
+# Environment Agency GIS — contaminated land registry (open WFS)
+uv run python scripts/ust_gis.py list
+uv run python scripts/ust_gis.py fetch
+
+# Air quality — UST PM10/PM2.5/NO2/H2S bulk CSVs + Open-Meteo wind, daily aggregates for Grensásvegur
+uv run python scripts/loftgaedi.py
+
+# Veðurstofa — stations, latest AWS observations, earthquakes (api.vedur.is JSON, no auth)
+uv run python scripts/vedur.py list
+uv run python scripts/vedur.py fetch                              # all three datasets
+uv run python scripts/vedur.py fetch --dataset quakes --days 7 --min-magnitude 1
+uv run python scripts/vedur.py fetch --dataset observations --aggregation hour
+
+# EEA geospatial catalogue (sdi.eea.europa.eu, GeoNetwork 4.4)
+uv run python scripts/eea_sdi.py search "grassland" --iceland --size 10
+uv run python scripts/eea_sdi.py record   35a036bb-c027-401c-8625-2ecf722e8461
+uv run python scripts/eea_sdi.py links    35a036bb-c027-401c-8625-2ecf722e8461
+uv run python scripts/eea_sdi.py xml      35a036bb-c027-401c-8625-2ecf722e8461 -o data/raw/eea_sdi/grassland_2015.xml
+
+# Hagstofan: CPI sub-components (headline + 12 COICOP groups + imported/domestic/services)
+# Chain-links VIS01304/01102 archive onto VIS01300/01101 current across the June 2024 break
+uv run python scripts/hagstofan_cpi.py
+
+# Hagstofan: population by citizenship (quarterly + annual by country), wages by private sector, immigrant labor share
+uv run python scripts/hagstofan_population_wages.py
+
+# Hagstofan: wage index (LAU04000) + labor/total income deciles (TEK01006/07) + PAYE by background (TEK02012)
+# Tidy long format with CPI-deflated real values
+uv run python scripts/hagstofan_income.py
+
+# Hagstofan: bike & e-bike imports by tariff code (ebikes/escooters/bikes) -> data/processed/bike_imports_all.csv
+uv run python scripts/hagstofan.py
+
+# Hagstofan income distribution — TEK01001 by source/age/gender (mean+median) + tax burden CSVs
+uv run python scripts/income_distribution.py
+
+# Take-home salary calculator (payday.is) — monthly gross -> take-home, tax + pension breakdown
+uv run python scripts/laun.py 1000000
+
+# HMS: house-price (kaupvísitala) vs rental-price (leiguvísitala) indices, rebased to 2023-05=100
+# Requires data/raw/hms/indices/{kaup,leigu}visitala.csv — manual downloads from hms.is
+uv run python scripts/hms_indices.py
+
+# Housing completions 1970–2025 — Hagstofan IDN03001 + HMS húsnæðisáætlanir -> data/processed/iceland_housing_completions.csv
+uv run python scripts/housing_completions.py
+
+# Download LMI geodata layers (~50 MB)
+uv run python scripts/lmi.py download
+
+# Generate Iceland maps
+uv run python scripts/kortagerð.py static -o reports/iceland-map.png
+uv run python scripts/kortagerð.py html -o reports/iceland-map.html
+uv run python scripts/kortagerð.py static --bounds capital --highlight "Reykjavíkurborg" -o reports/rvk.png
+
+# Náttúrufræðistofnun: habitat-type mask from the 5 m vistgerðir raster via WCS
+# (1:25.000 3rd ed.; DN=95 = L14.2 Tún og akurlendi, 1,806 km²)
+# The old LMI_vektor:vistgerd polygon layer was withdrawn in 2026 — raster only.
+# Fetch cost is server-bound and scales with output pixels — see --res below.
+uv run python scripts/natt.py habitat --dn 95            # 50 m ISN93 mask, ~2 min
+uv run python scripts/natt.py habitat --dn 95 --res 100  # ~1 min, still map-grade
+uv run python scripts/natt.py habitat --dn 95 --res 20   # ~30 min, detail work
+uv run python scripts/natt.py inventory          # DN→htxt codes, from the WMS legend
+
+# Map of Iceland's agricultural land (PNG + single-file Leaflet HTML)
+uv run python scripts/agricultural_land_map.py
+
+# Iceland grassland map (Copernicus HRL via LMI, 20 m raster) — uses Tier 3 cache
+uv run python scripts/lmi_hrl.py fetch grassland       # one-time, ~860 MB
+uv run python scripts/build_cache.py rasters           # one-time, → 9 MB ISN93 GeoTIFF
+uv run python scripts/grassland_map.py                 # ≈3 s warm
+
+# GRAVPI heatmap (Copernicus EEA discomap WMS — no LMI Iceland clip exists)
+uv run python scripts/grassland_probability_heatmap.py
+
+# Directorate of Health — list all dashboards, scrape one (Playwright)
+uv run python scripts/landlaeknir.py list
+uv run python scripts/landlaeknir.py fetch --slug mortis
+
+# Vinnumálastofnun — Excel + Power BI capture
+uv run python scripts/vinnumalastofnun.py fetch
+
+# Farsæld barna — child wellbeing Power BI capture
+uv run python scripts/farsaeld_barna.py fetch
+
+# Vernd — asylum / international-protection dashboard
+uv run python scripts/vernd.py info
+uv run python scripts/vernd.py fetch
+
+# Byggðastofnun — regional-development dashboard catalog (Tableau Public)
+uv run python scripts/byggdastofnun.py list
+uv run python scripts/byggdastofnun.py url tekjur
+
+# Tekjusagan — income history (token + Playwright drive)
+uv run python scripts/tekjusagan.py token
+uv run python scripts/tekjusagan.py fetch
+
+# Skoðanakannanir — RÚV + Vísir + Heimildin opinion-poll aggregators (national + Reykjavík, all pollsters)
+uv run python scripts/skodanakannanir.py list
+uv run python scripts/skodanakannanir.py list --source visir --since 2025 --scope reykjavik
+uv run python scripts/skodanakannanir.py list --source heimildin --since 2020
+uv run python scripts/skodanakannanir.py list --source all --since 2025
+uv run python scripts/skodanakannanir.py fetch 479261
+uv run python scripts/skodanakannanir.py fetch visir-20262904348    # Vísir works too, no browser needed
+
+# Skoðanakannanir --topic esb — same pipeline, EU-membership support/oppose (ahead of the 2026-08-29 þjóðaratkvæðagreiðsla)
+uv run python scripts/skodanakannanir.py list --source visir --since 2025 --topic esb
+uv run python scripts/skodanakannanir.py fetch visir-20262915377 --topic esb   # or omit --topic: auto-detected per article
+
+# Ferðamálastofa — Keflavík tourism Power BI
+uv run python scripts/ferdamalastofa.py --help
+
+# Velsældarvísar + Félagsvísar + Menningarvísar — Hagstofa indicator catalog
+uv run python scripts/velsaeldarvisar.py fetch
+uv run python scripts/velsaeldarvisar.py list --section velsaeldarvisar
+uv run python scripts/velsaeldarvisar.py pxtables
+
+# Heimsmarkmið — UN SDG national statistics (open-sdg)
+uv run python scripts/heimsmarkmid.py fetch
+uv run python scripts/heimsmarkmid.py list --goal 4
+uv run python scripts/heimsmarkmid.py get 1-1-1
+
+# Ríkisreikningur — state accounts ACTUALS (Fjársýsla)
+uv run python scripts/rikisreikningur.py summary
+uv run python scripts/rikisreikningur.py malefni
+uv run python scripts/rikisreikningur.py files
+
+# Opnir reikningar — state paid invoices by org/vendor (2017–present)
+uv run python scripts/opnirreikningar.py search-org "Veðurstofa"
+uv run python scripts/opnirreikningar.py fetch --org-text "14412 - Veðurstofa Íslands" --from 2024-01-01 --to 2024-12-31
+uv run python scripts/opnirreikningar.py top-vendors --org 14412 --year 2024
+
+# Public procurement — TED API + OCDS bulk data (3,494+ tenders), award tracking, CPV search
+uv run python scripts/tenders.py download-ocds
+uv run python scripts/tenders.py search --cpv 90600000 --date-from 20240101
+uv run python scripts/tenders.py awards --buyer "Reykjavíkurborg"
+
+# Reykjavík winter/street tender results 2018–2024 (reykjavik.is scrape) -> data/processed/reykjavik_winter_tenders.csv
+uv run python scripts/reykjavik_tenders.py
+
+# Reykjavík env-ops wages vs other-costs ratio (outsourcing proxy) -> data/processed/reykjavik_env_ops_ratio.csv
+uv run python scripts/reykjavik_winter.py
+
+# Ríkissjóður balance 1980-2025 — Hagstofan THJ05211 (pre-2015; the Fjársýsla API only goes back to 2015)
+uv run python scripts/hagstofan_rikissjod.py list     # sibling tables + coverage
+uv run python scripts/hagstofan_rikissjod.py fetch    # → data/processed/rikissjod_balance.csv
+
+# Alþingi — parliamentary XML: MPs, per-MP vote records, bills, committees, speeches
+# --thing defaults to the sitting parliament (resolved at runtime, never hardcoded)
+uv run python scripts/althingi.py list                        # all parliaments
+uv run python scripts/althingi.py list --datasets
+uv run python scripts/althingi.py fetch --dataset members     # roster + party + constituency
+uv run python scripts/althingi.py fetch --dataset votes --thing 156   # events + per-MP ballots
+uv run python scripts/althingi.py fetch --dataset all --thing 150-156
+
+# Fjárlög — state budget APPROPRIATIONS + 5-yr plan (málaflokkur level)
+uv run python scripts/fjarlog.py fetch                 # → data/processed/fjarlog.parquet
+uv run python scripts/fjarlog.py products              # afurð × year coverage
+uv run python scripts/fjarlog.py mala 04.30            # defense across actual/enacted/bill
+
+# CO2.is — climate action plan
+uv run python scripts/co2.py fetch
+uv run python scripts/co2.py list --kerfi S
+uv run python scripts/co2.py list --status "Í framkvæmd"
+
+# HMS Landeignaskrá — download shapefile, build landsnr → lon/lat CSV
+uv run python scripts/landeignaskra.py download    # 25 MB Azure blob
+uv run python scripts/landeignaskra.py extract
+uv run python scripts/landeignaskra.py build       # data/processed/landeignaskra.csv
+uv run python scripts/landeignaskra.py lookup 0174540
+
+# Reykjavík planning activity (Planitor) — building/planning cases by type & stage -> data/processed/planitor_reykjavik_planning.csv
+uv run python scripts/skipulagsmal.py
+
+# Seðlabanki interest rates — Power BI scrape via gagnabanki.is
+uv run python scripts/sedlabanki_rates.py
+
+# Lánamál ríkisins — government bond yields (RIKB/RIKS, no auth, UTF-16 JSON)
+uv run python scripts/lanamal.py list                # live orderbook catalog from /markadsyfirlit
+uv run python scripts/lanamal.py fetch              # daily fixings -> data/processed/lanamal.csv
+uv run python scripts/lanamal.py fetch --orderbook RIKB_31_0124
+
+# Samgöngustofa bifreiðatölur — vehicle registrations via reverse-engineered Power BI API
+# (geo-fenced: run from an Icelandic IP). list shows both reports + all dimensions.
+uv run python scripts/samgongustofa.py list
+uv run python scripts/samgongustofa.py fetch --report onroad --dimension fuel        # current fleet EV split
+uv run python scripts/samgongustofa.py fetch --dimension make --years 2020-2026      # imports by brand/year
+uv run python scripts/samgongustofa.py fetch --dimension fuel --years 2025,2026 --monthly
+
+# island.is vehicle lookup by plate or VIN (public GraphQL API)
+uv run python scripts/car.py AB123
+
+# Traffic counters (Vegagerðin) — list, snapshot, accumulate, render
+uv run python scripts/umferd.py stations
+uv run python scripts/umferd.py snapshot
+uv run python scripts/umferd.py collect
+uv run python scripts/umferd.py report
+uv run python scripts/umferd_map.py    # Iceland-wide traffic map (depends on LMI cache from PR 1)
+
+# Mælaborð landbúnaðarins — cattle-subsidy recipients (Playwright scrape of "Eftir búi" matrix)
+uv run python scripts/maelabord_nautgripa.py fetch
+
+# Render cattle-subsidy farms on an Iceland map (depends on PR 1 LMI cache + PR 4 landeignaskra)
+uv run python scripts/nautgripa_map.py
+
+# Map-construction caching (Tier 3+4; ISN93-reprojected raster + Iceland constants)
+uv run python scripts/build_cache.py all                 # build all derived caches
+uv run python scripts/build_cache.py status              # what is cached / stale / missing
+uv run python scripts/build_cache.py rasters --only grassland_isn93
+
+# Benchmark map-construction speed (cold|warm-raw|warm), JSON history
+uv run python scripts/bench_maps.py run --mode warm
+uv run python scripts/bench_maps.py history
+
+# Cache + render integration tests
+uv run pytest tests/test_cache_consistency.py tests/test_maps_render.py -v
+```
+
+## Tests and source health
+
+> **Fork note (`gudrodur/icelandic-data`).** Everything below describes upstream's setup and
+> is accurate for `jokull/icelandic-data`. Two things differ here, and both are easy to
+> misread because the workflow file is byte-identical to upstream on purpose:
+>
+> - **The runner is not the mac-mini.** Probes run on `fedora-icelandic-data`, a self-hosted
+>   runner on Guðröður's Fedora box, registered to this repo with labels
+>   `self-hosted, iceland, fedora`. The `iceland` label was chosen deliberately so
+>   `runs-on: [self-hosted, iceland]` needs no fork-side edit. Consequence: the daily run
+>   depends on that machine being awake at 06:17 UTC. If it is off, the run does not happen,
+>   which the history records as *not observed*, never as *down*.
+> - **There is no dead-man's-switch on this fork.** The mechanism described under "The blind
+>   spot" runs on the mini and watches upstream's `health-history`. Nothing watches ours. So
+>   for this repo that section documents a safety net we do not have.
+
+
+```bash
+uv run pytest -m "not slow"            # fast, offline — what PR CI runs
+uv run pytest -m slow                  # network + Playwright integration tests
+
+# Upstream health probes (tests/health/) — smallest stable contract per source
+uv run pytest -m health                        # every probe
+uv run pytest -m health -k hagstofan           # one source by name
+uv run pytest -m "health and not degraded_ok"   # required lane
+uv run pytest -m "health and degraded_ok"      # staleness / known-soft lane
+uv run pytest -m health                        # every probe
+
+# Render today's snapshot from both lanes
+uv run python scripts/health_summary.py --required health-required.xml \
+  --degraded health-degraded.xml --json health-results.json
+
+# Judge over history — this is what gates CI (a lone red is a flake)
+uv run python scripts/health_verdict.py --history .history/history.jsonl --window-days 30
+```
+
+Health probes run daily in `.github/workflows/source-health.yml`, on the
+self-hosted mac-mini (`solberg.club`, labels `self-hosted` + `iceland`) — the
+runner exists because GitHub-hosted runners sit in Azure datacenters with no
+Iceland region: geo-fenced sources like `bifreidatolur.samgongustofa.is`
+answer Icelandic IPs in ~50 ms but `ConnectTimeout` from every GitHub runner,
+and Power BI/Tableau bot detection trips on datacenter IPs. There is no
+`browser` lane anymore — the one probe that used it (`samgongustofa`, plain
+HTTP) was only geo-fence-blocked, and the mini fixed that.
+
+Note that `degraded_ok` is **not** an escape hatch for an unreachable source: a
+degraded row is still a non-healthy observation to `health_verdict.py`, so three
+in a row still read `dead` and still gate. Only `skipped` rows (and no rows at
+all) are excluded from the streak.
+
+To add a probe for a new source, see the `new-data-source` skill.
+
+### Flake vs dead
+
+A single red means almost nothing, so nothing gates on one. Two mechanisms
+separate a blip from a corpse:
+
+**The exception class, free and immediate.** A *structural* failure (assertion,
+401, 404) means the service answered and answered **wrong** — schema drift, an
+expired dashboard id, a revoked key. That essentially never self-heals, so the
+skill is already out of date and needs updating. An *infra* failure (connect
+timeout, DNS, 5xx) means we could not reach it, which is genuinely ambiguous and
+needs history. `scripts/health_summary.py:classify()` makes this split.
+
+**History, for the ambiguous half.** Each run appends one JSONL observation per
+source to the orphan `health-history` branch — git scraping, in Simon Willison's
+sense: the file is the database, git is the retention policy, DuckDB is the query
+engine. `scripts/health_verdict.py` then judges:
+
+| Verdict | Rule | Gates CI |
+|---|---|---|
+| `broken` | 2+ consecutive **structural** failures — fix the skill | yes |
+| `dead` | 3+ consecutive failures | yes |
+| `flaky` | failed but recovered | no |
+| `healthy` | clean across the window | no |
+| `unknown` | fewer than 2 observations | no |
+
+Streaks count **consecutive observations, never calendar days**. GitHub documents
+that scheduled runs may be dropped entirely, so a gap in the history means *not
+observed*, not *down* — and uptime is `healthy/observed`, never `healthy/elapsed`.
+
+```bash
+# Uptime per source, straight off the JSONL — no ingest step
+git fetch origin health-history && git show origin/health-history:history.jsonl > /tmp/h.jsonl
+duckdb -c "
+SELECT source,
+       round(100.0 * count(*) FILTER (WHERE status='healthy') / count(*), 1) AS uptime_pct,
+       count(*) AS observations,
+       max(ts) FILTER (WHERE status='healthy')::date AS last_ok
+FROM read_json_auto('/tmp/h.jsonl')
+WHERE ts > now() - INTERVAL 30 DAY AND status != 'skipped'
+GROUP BY source ORDER BY uptime_pct;"
+```
+
+### The blind spot: GitHub cannot alert you that GitHub stopped
+
+Scheduled runs can be dropped silently, and scheduled workflows in public repos
+are auto-disabled after 60 days of repository inactivity (GitHub never defines
+"activity"). Both fail closed and quiet: no run, no failure, no email. The daily
+history commits are genuine activity and plausibly hold that clock off, but
+that is inference, not a documented contract — so it is not the safety net.
+
+The safety net is a dead-man's-switch: something *outside* GitHub that notices
+the **absence** of observations.
+
+**Live mechanism — pull, from the mac-mini** (`solberg.club`):
+
+| | |
+|---|---|
+| Script | `~/clawd/bin/icelandic-data-dms.sh` |
+| Schedule | `~/Library/LaunchAgents/com.jokull.icelandic-data-dms.plist` (every 6h) |
+| Logs | `~/clawd/logs/icelandic-data-dms.log` |
+| Alert | Telegram via `openclaw message send` |
+
+It polls the GitHub API for the age of the last commit on `health-history`. Over
+36h (two missed runs, allowing for cron drift) → Telegram alert, with a 20h
+cooldown so it nags once a day rather than once a run. It sends an all-clear on
+recovery, and stays silent when healthy.
+
+It watches **the monitor, not the sources** — "is anyone still watching?" Source
+health is already answered, with detail, by the workflow. Keep that separation:
+a switch that also opines on source health is a switch that can cry wolf.
+
+Pull beats push here: it needs no inbound ingress and no secret, and it catches
+the auto-disable case (where the workflow never runs to push anything) that a
+push-ping structurally cannot.
+
+**Keeping the mini's clone current.** The runner checks out its own workspace
+per run, so `~/Code/icelandic-data` (used by local/agent sessions on the mini)
+has nothing keeping it fresh on its own — it drifted 11 commits behind
+`origin/main` at least once. A periodic ff-only pull fixes that:
+
+| | |
+|---|---|
+| Script | `~/clawd/bin/icelandic-data-pull.sh` |
+| Schedule | `~/Library/LaunchAgents/com.jokull.icelandic-data-pull.plist` (every 6h + at load) |
+| Logs | `~/clawd/logs/icelandic-data-pull.log` |
+| Alert | Telegram via `openclaw message send` — but only on divergence/network failure |
+
+`--ff-only` never clobbers local work; a divergent clone alerts instead of
+force-pulling.
+
+Three properties worth preserving if you touch it:
+
+- **Unreachable ≠ stale.** If the API can't be reached after 3 tries it logs
+  UNKNOWN and stays silent — the likeliest cause is the mini's own network, and
+  alerting on that trains you to ignore it. (This fired on the very first
+  launchd run; the retry recovered on attempt 2.)
+- **It never stamps the cooldown on a failed send.** Otherwise a deaf switch
+  silences itself for 20h while nobody knows anything is wrong.
+- **It pins node explicitly.** `node` here is fnm-managed at a per-shell path
+  that does not exist under launchd; the `openclaw` shim then resolves a
+  different node and dies on a native sqlite ABI mismatch. The script pins the
+  same interpreter + entrypoint as `ai.openclaw.gateway.plist`. Keep them in
+  step across openclaw upgrades.
+
+**Optional alternative — push.** `source-health.yml` also has an inert ping step
+for anyone without the mini; set `HEALTH_PING_URL` (e.g. healthchecks.io) to
+enable. It fires when the probes **ran and recorded**, whatever the verdict —
+never on job success, or a legitimately dead source would silence the switch.
+
+**Residual blind spot:** the switch depends on the mini and its Gateway being up.
+If the mini dies, nothing alerts. That is accepted — you would notice — but it
+is where the turtles stop.
+
+## Scripts layout
+
+- `scripts/*.py` — fetchers/cleaners: hit an API or read raw files, write tidy CSVs to `data/processed/`
+- `scripts/health_summary.py` — renders health results from pytest JUnit XML (not a fetcher)
+- `tests/health/test_{source}.py` — upstream health probes, auto-marked `slow` + `health`
+- `reports/*.py` — one-off report scripts (gitignored, local-only, sit next to the `.html` they emit)
+
+> **Fork-only exception.** Three files under `reports/` ARE tracked here:
+> `build_esb_report.py`, `esb_kannanir_2026.json` and `esb-kannanir-2026-artifact.html`.
+> They are not a one-off. The builder holds numbers read by hand out of article prose plus
+> the editorial calls that go with them, so rerunning anything cannot regenerate it, and it
+> is the source of truth for a page that is published, shared publicly and updated
+> repeatedly. Untracked it lived in exactly one place on one disk. Everything else under
+> `reports/` follows upstream's rule unchanged.
+>
+> `data/processed/skodanakannanir.csv` is tracked for the same reason. It looks derived, and
+> mostly is, but three rows are `source=manual`: the Gallup/Áfram Ísland poll (`ruv-483052`)
+> is not reachable by `list`, because RÚV never tagged that article a poll. Rerunning the
+> pipeline on a fresh checkout therefore produces a *smaller* file, silently, and this is the
+> path the Quick Commands above tell you to query with duckdb. Nothing else under
+> `data/processed/` is tracked.
+
+Inflation-specific analysis (derivation scripts, research reports, the whodunit blog post) lives in [`~/Code/inflation-whodunit`](../inflation-whodunit). That repo reads processed data from here.

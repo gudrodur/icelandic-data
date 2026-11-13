@@ -1,0 +1,927 @@
+{
+  "meta": {
+    "title": "ESB-skoðanakannanir 2026",
+    "description": "All EU-membership (ESB) opinion polls published in 2026 found via the maskina skill (WordPress API + Tableau VizQL) and the skodanakannanir skill (RÚV/Vísir/Heimildin aggregators, --topic esb). Every figure hand-verified against the article prose; five auto-extractions were corrected by hand (see extraction.method). Excluded: visir-20262917099 (Maskína, 2026-08-04) asks whether interest rates would fall and whether a fisheries exemption is likely — an attitudes poll, not voting intention.",
+    "generated": "2026-08-19",
+    "period_covered": {
+      "from": "2026-01-01",
+      "to": "2026-08-19"
+    },
+    "referendum": {
+      "date": "2026-08-29",
+      "question": "Á Ísland að hefja á ný aðildarviðræður við Evrópusambandið?",
+      "type": "þjóðaratkvæðagreiðsla"
+    },
+    "sources": {
+      "skills": [
+        ".agents/skills/maskina/SKILL.md",
+        ".agents/skills/skodanakannanir/SKILL.md"
+      ],
+      "discovery_commands": [
+        "uv run python scripts/skodanakannanir.py list --source all --since 2025 --topic esb",
+        "curl 'https://maskina.is/wp-json/wp/v2/posts?search=ESB&after=2026-01-01T00:00:00'"
+      ],
+      "verification": "Hand-read article prose for every poll; auto-extracted values kept only where they matched the text. Tableau workbook 12_01_2026-ESB_virur read directly via VizQL for the January Maskína poll."
+    },
+    "question_framings": {
+      "membership": "Aðild sjálf: 'Ert þú hlynnt(ur) eða andvíg(ur) því að Ísland gangi í ESB?'",
+      "talks": "Aðildarviðræður: support for (resuming/continuing) accession negotiations",
+      "referendum_vote": "Atkvæðið: how the respondent would vote in the 2026-08-29 referendum",
+      "referendum_approval": "Afstaða til þess að atkvæðagreiðslan sé haldin yfirhöfuð",
+      "note": "The three framings measure systematically differently and are not interchangeable: membership itself polls negative all year, talks poll positive, and the referendum vote itself has stayed narrowly 'já' in every direct measurement (52, 52, 52/48, 53/47)."
+    },
+    "result_bases": {
+      "all": "share of all respondents",
+      "decided": "share of those who took a stance (afstöðu tekið)",
+      "unspecified": "article does not state the basis unambiguously"
+    },
+    "extractor_gaps_found": [
+      {
+        "gap": "NATO synonym missing from _ESB_EXCLUDE_RE",
+        "detail": "'Atlantshafsbandalagið'/'bandalagið' not excluded (only 'varnarbandalag' is) — visir-20262838574's NATO figures (78/17/9) were extracted as ESB figures.",
+        "independent_examples": 2,
+        "meets_fix_threshold": true
+      },
+      {
+        "gap": "'greiða atkvæði með/gegn' vocabulary not recognized",
+        "detail": "The referendum-vote phrasing carries no já/nei/hlynnt/andvígt answer term — toplines skipped in visir-20262902621 and visir-20262853438, subgroup numbers extracted instead.",
+        "independent_examples": 2,
+        "meets_fix_threshold": true
+      },
+      {
+        "gap": "demographic-subgroup sentences unguarded",
+        "detail": "Sentences scoped to karla/kvenna/aldurshópa pair as toplines (62/22 = women's numbers in visir-20262853438; 63/58 = age groups in visir-20262902621). _NON_SUPPORT_TOPIC_RE guards kjósend-/fylgismann- subgroups but not demographic ones.",
+        "independent_examples": 2,
+        "meets_fix_threshold": true
+      }
+    ]
+  },
+  "polls": [
+    {
+      "poll_id": "maskina-2025-12-kryddsild",
+      "published": "2026-01-12",
+      "pollster": "Maskína",
+      "commissioned_by": "Sýn (Kryddsíld)",
+      "population": "national",
+      "fieldwork": {
+        "note": "3.–15. október 2025 (per article methodology); Tableau wave labelled 2025-12-01"
+      },
+      "sample": {
+        "size": 1765,
+        "panel": "Þjóðgátt",
+        "weighting": "Þjóðskrá"
+      },
+      "questions": [
+        {
+          "framing": "talks",
+          "question_text": "Ef haldin verður atkvæðagreiðsla um áframhaldandi aðildarviðræður við ESB, myndir þú greiða atkvæði með eða á móti?",
+          "results": [
+            {
+              "answer": "Með (hlynnt)",
+              "pct": 53.0,
+              "basis": "decided"
+            },
+            {
+              "answer": "Á móti (andvígt)",
+              "pct": 47.0,
+              "basis": "decided"
+            }
+          ],
+          "change": {
+            "vs": "2024-12",
+            "med_pct_then": 50.9,
+            "delta_pt": 2.1
+          },
+          "extraction": {
+            "method": "auto_verified",
+            "note": "cross-checked against Tableau workbook waves"
+          }
+        }
+      ],
+      "structured_data": {
+        "tableau_workbook": "12_01_2026-ESB_virur",
+        "tableau_view": "Frtt-ESB",
+        "worksheet": "helstu-ESB (2)",
+        "waves": [
+          {
+            "date": "2024-12-01",
+            "med_pct": 50.9,
+            "a_moti_pct": 49.1
+          },
+          {
+            "date": "2025-12-01",
+            "med_pct": 53.0,
+            "a_moti_pct": 47.0
+          }
+        ]
+      },
+      "articles": [
+        {
+          "source": "maskina",
+          "id": "maskina-6202",
+          "title": "53% hlynnt áframhaldandi aðildarviðræðum við ESB",
+          "url": "https://maskina.is/53-hlynnt-aframhaldandi-adildarvidraedum-vid-esb/",
+          "published_at": "2026-01-12"
+        },
+        {
+          "source": "visir",
+          "id": "visir-20262827389",
+          "title": "Meirihluti hlynntur aðildarviðræðum: „Margt breyst á stuttum tíma“",
+          "url": "https://www.visir.is/g/20262827389d/meirihluti-hlynntur-adildarvidraedum-margt-breyst-a-stuttum-tima-",
+          "published_at": "2026-01-11T12:20:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-2026-02-thjodarpuls",
+      "published": "2026-02-04",
+      "pollster": "Gallup",
+      "commissioned_by": null,
+      "series": "Þjóðarpúls",
+      "population": "national",
+      "fieldwork": {
+        "from": "2026-01-21",
+        "to": "2026-02-02"
+      },
+      "sample": {
+        "size": 1672,
+        "response_rate_pct": 48.8
+      },
+      "questions": [
+        {
+          "framing": "membership",
+          "question_text": "Hlynnt(ur) eða andvíg(ur) aðild Íslands að Evrópusambandinu?",
+          "results": [
+            {
+              "answer": "Hlynnt",
+              "pct": 42.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Andvígt",
+              "pct": 42.0,
+              "basis": "all"
+            }
+          ],
+          "change": {
+            "vs": "2025",
+            "andvigt_delta_pt": 6,
+            "hlynnt_delta_pt": -2
+          },
+          "extraction": {
+            "method": "hand_corrected",
+            "note": "Auto-extraction returned the same poll's NATO figures (hlynnt 78 / hvorki né 17 / andvígt 9) because 'Atlantshafsbandalaginu' is not in _ESB_EXCLUDE_RE."
+          }
+        }
+      ],
+      "related_non_esb_questions": [
+        {
+          "topic": "NATO membership",
+          "results": {
+            "hlynnt": 78,
+            "hvorki_ne": 17,
+            "andvigt": 9
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262838574",
+          "title": "Þjóðin klofin gagnvart ESB og fylgi við NATO á hreyfingu",
+          "url": "https://www.visir.is/g/20262838574d/thjodin-klofin-gagnvart-esb-og-fylgi-vid-nato-a-hreyfingu",
+          "published_at": "2026-02-04T08:43:00"
+        },
+        {
+          "source": "ruv",
+          "id": "ruv-466122",
+          "title": "Áhyggjur af stöðu öryggismála og kröfur um meiri samstöðu",
+          "url": "https://www.ruv.is/frettir/erlent/2026-02-04-ahyggjur-af-stodu-oryggismala-og-krofur-um-meiri-samstodu-466122",
+          "published_at": "2026-02-04T11:53:47.808723Z",
+          "note": "Same-day security-survey angle; correctly yielded no ESB figures"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-2026-03-referendum",
+      "published": "2026-03-09",
+      "pollster": "Gallup",
+      "commissioned_by": null,
+      "series": "Þjóðarpúls",
+      "population": "national",
+      "fieldwork": {
+        "note": "not stated beyond 'nýr Þjóðarpúls'"
+      },
+      "sample": {
+        "size_note": "rúmlega 800 þátttakendur"
+      },
+      "questions": [
+        {
+          "framing": "referendum_approval",
+          "question_text": "Hlynnt(ur) eða andvíg(ur) þjóðaratkvæðagreiðslunni um framhald aðildarviðræðna?",
+          "results": [
+            {
+              "answer": "Hlynnt",
+              "pct": 58.0,
+              "basis": "all",
+              "breakdown": {
+                "alfarið": 33,
+                "mjög": 12,
+                "frekar": 13
+              }
+            },
+            {
+              "answer": "Hvorki né",
+              "pct": 12.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Andvígt",
+              "pct": 30.0,
+              "basis": "all",
+              "breakdown": {
+                "frekar": 7,
+                "mjög": 5,
+                "alfarið": 18
+              }
+            }
+          ],
+          "extraction": {
+            "method": "hand_corrected",
+            "note": "Auto-extraction returned the women's subgroup (hlynnt 62 / andvígt 22) as the topline."
+          }
+        },
+        {
+          "framing": "referendum_vote",
+          "question_text": "Hvernig myndir þú líklegast greiða atkvæði ef þjóðaratkvæðagreiðslan væri haldin í dag?",
+          "results": [
+            {
+              "answer": "Með áframhaldandi viðræðum",
+              "pct": 52.0,
+              "basis": "unspecified"
+            },
+            {
+              "answer": "Hætta viðræðum",
+              "pct": 48.0,
+              "basis": "unspecified"
+            }
+          ],
+          "extraction": {
+            "method": "hand_corrected",
+            "note": "Skipped by auto-extraction ('kjósa með' phrasing outside vocabulary)."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262853438",
+          "title": "Þriðjungur andvígur atkvæðagreiðslunni",
+          "url": "https://www.visir.is/g/20262853438d/thridjungur-andvigur-atkvaedagreidslunni",
+          "published_at": "2026-03-09T16:12:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "si-members-2026-03",
+      "published": "2026-03-09",
+      "pollster": null,
+      "commissioned_by": "Samtök iðnaðarins",
+      "population": "si_members",
+      "population_note": "Félagsmenn SI — interest-group survey, not a national sample",
+      "fieldwork": {
+        "note": "febrúar–mars 2026"
+      },
+      "questions": [
+        {
+          "framing": "membership",
+          "results": [
+            {
+              "answer": "Andvígt",
+              "pct": 57.0,
+              "basis": "all",
+              "breakdown": {
+                "mjög_andvíg": 43
+              }
+            },
+            {
+              "answer": "Hlynnt",
+              "pct": 25.0,
+              "approx": true,
+              "basis": "all",
+              "breakdown": {
+                "mjög_fylgjandi": 10,
+                "frekar_hlynnt": 15
+              }
+            }
+          ],
+          "change": {
+            "vs": "2024",
+            "note": "mjög andvíg nearly doubled; mjög fylgjandi fell 17 → 10"
+          },
+          "extraction": {
+            "method": "hand_corrected",
+            "note": "Auto-extraction recorded hlynnt 10 (only the 'mjög fylgjandi' component)."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262853308",
+          "title": "Iðnaðurinn forherðist í andstöðu gegn ESB",
+          "url": "https://www.visir.is/g/20262853308d/idnadurinn-forherdist-i-andstodu-gegn-esb",
+          "published_at": "2026-03-09T13:24:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-vb-2026-04",
+      "published": "2026-04-07",
+      "pollster": "Gallup",
+      "commissioned_by": "Viðskiptablaðið",
+      "population": "national",
+      "fieldwork": {
+        "note": "byrjun apríl 2026"
+      },
+      "questions": [
+        {
+          "framing": "membership",
+          "results": [
+            {
+              "answer": "Hlynnt",
+              "pct": 40.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Andvígt",
+              "pct": 47.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Hvorki né",
+              "pct": 13.0,
+              "basis": "all"
+            }
+          ],
+          "extraction": {
+            "method": "auto_verified",
+            "note": "Two independent articles agree; figures restated in visir-20262895588's retrospective."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262866089",
+          "title": "Meirihluti þeirra sem taka afstöðu andvíg aðild að ESB",
+          "url": "https://www.visir.is/g/20262866089d/meirihluti-theirra-sem-taka-afstodu-andvig-adild-ad-esb",
+          "published_at": "2026-04-07T21:40:00"
+        },
+        {
+          "source": "visir",
+          "id": "visir-20262866297",
+          "title": "Á brattann að sækja fyrir aðildarsinna",
+          "url": "https://www.visir.is/g/20262866297d/a-brattann-ad-saekja-fyrir-adildarsinna",
+          "published_at": "2026-04-08T12:07:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "maskina-2026-04",
+      "published": "2026-04-15",
+      "pollster": "Maskína",
+      "commissioned_by": null,
+      "population": "national",
+      "questions": [
+        {
+          "framing": "membership",
+          "question_text": "Afstaða til aðildar Íslands að ESB í dag",
+          "results": [
+            {
+              "answer": "Andvígt",
+              "pct": 46.0,
+              "basis": "unspecified"
+            }
+          ],
+          "change": {
+            "vs": "2025-04",
+            "andvigt_pct_then": 39.8
+          },
+          "extraction": {
+            "method": "auto_verified",
+            "note": "Verified in SKILL.md regression set."
+          }
+        },
+        {
+          "framing": "talks",
+          "results": [
+            {
+              "answer": "Hlynnt",
+              "pct": 42.0,
+              "basis": "unspecified"
+            }
+          ],
+          "extraction": {
+            "method": "auto_verified"
+          }
+        }
+      ],
+      "multi_question_note": "Same article asks both membership and talks — the two figures answer different questions.",
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262869821",
+          "title": "Fleiri andvígir aðild nú en í fyrra",
+          "url": "https://www.visir.is/g/20262869821d/fleiri-andvigir-adild-nu-en-i-fyrra",
+          "published_at": "2026-04-15T21:13:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-vb-2026-06",
+      "published": "2026-06-10",
+      "pollster": "Gallup",
+      "commissioned_by": "Viðskiptablaðið",
+      "population": "national",
+      "questions": [
+        {
+          "framing": "membership",
+          "question_text": "Ert þú hlynnt(ur) eða andvíg(ur) því að Ísland gangi í Evrópusambandið (ESB)?",
+          "results": [
+            {
+              "answer": "Hlynnt",
+              "pct": 39.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Andvígt",
+              "pct": 47.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Hvorki né",
+              "pct": 13.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Hlynnt",
+              "pct": 46.0,
+              "basis": "decided"
+            },
+            {
+              "answer": "Andvígt",
+              "pct": 54.0,
+              "basis": "decided"
+            }
+          ],
+          "extraction": {
+            "method": "auto_verified",
+            "note": "Verified in SKILL.md; bases confirmed by hand-read 2026-08-01."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262895588",
+          "title": "Fleiri andvígir inngöngu í ESB",
+          "url": "https://www.visir.is/g/20262895588d/fleiri-andvigir-inngongu-i-esb",
+          "published_at": "2026-06-10T11:25:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "maskina-dv-2026-06",
+      "published": "2026-06-13",
+      "pollster": "Maskína",
+      "commissioned_by": "DV",
+      "population": "national",
+      "fieldwork": {
+        "from": "2026-06-02",
+        "to": "2026-06-11"
+      },
+      "sample": {
+        "size": 1856,
+        "decided": 1558
+      },
+      "questions": [
+        {
+          "framing": "talks",
+          "results": [
+            {
+              "answer": "Hlynnt",
+              "pct": 44.5,
+              "basis": "all"
+            },
+            {
+              "answer": "Andvígt",
+              "pct": 39.4,
+              "basis": "all"
+            },
+            {
+              "answer": "Veit ekki",
+              "pct": 14.6,
+              "basis": "all"
+            },
+            {
+              "answer": "Vildu ekki svara",
+              "pct": 1.5,
+              "basis": "all"
+            },
+            {
+              "answer": "Hlynnt",
+              "pct": 53.1,
+              "basis": "decided"
+            },
+            {
+              "answer": "Andvígt",
+              "pct": 46.9,
+              "basis": "decided"
+            }
+          ],
+          "extraction": {
+            "method": "auto_verified",
+            "note": "Verified in SKILL.md; bases confirmed by hand-read 2026-08-01."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262897210",
+          "title": "Fleiri hlynntir en andvígir samkvæmt nýrri könnun",
+          "url": "https://www.visir.is/g/20262897210d/fleiri-hlynntir-en-andvigir-samkvaemt-nyrri-konnun",
+          "published_at": "2026-06-13T18:10:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-2026-06-thjodarpuls",
+      "published": "2026-06-27",
+      "pollster": "Gallup",
+      "commissioned_by": null,
+      "series": "Þjóðarpúls",
+      "population": "national",
+      "fieldwork": {
+        "from": "2026-06-12",
+        "to": "2026-06-24",
+        "mode": "netkönnun, Viðhorfahópur Gallup"
+      },
+      "sample": {
+        "size": 1993,
+        "response_rate_pct": 41.1
+      },
+      "questions": [
+        {
+          "framing": "referendum_vote",
+          "question_text": "Ef þjóðaratkvæðagreiðsla færi fram í dag þar sem spurt væri: 'Á Ísland að hefja á ný aðildarviðræður við Evrópusambandið?', hvernig telur þú líklegast að þú myndir greiða atkvæði?",
+          "results": [
+            {
+              "answer": "Já (með)",
+              "pct": 52.0,
+              "basis": "unspecified"
+            },
+            {
+              "answer": "Nei (gegn)",
+              "pct": 48.0,
+              "basis": "unspecified"
+            }
+          ],
+          "extraction": {
+            "method": "hand_corrected",
+            "note": "Auto-extraction returned age subgroups (já 63 = 18–29 ára, nei 58 = 30–39 ára); topline phrasing 'greiða atkvæði með/gegn' is outside the answer vocabulary."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262902621",
+          "title": "Rétt rúmur helmingur myndi segja já í ágúst",
+          "url": "https://www.visir.is/g/20262902621d/rett-rumur-helmingur-myndi-segja-ja-i-agust",
+          "published_at": "2026-06-27T11:37:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-sa-2026-07",
+      "published": "2026-07-28",
+      "pollster": "Gallup",
+      "commissioned_by": "Samtök atvinnulífsins",
+      "population": "sa_member_companies",
+      "population_note": "Aðildarfyrirtæki SA — company survey, not a national sample",
+      "questions": [
+        {
+          "framing": "membership",
+          "results": [
+            {
+              "answer": "Andvígt",
+              "pct": 66.0,
+              "basis": "all"
+            }
+          ],
+          "extraction": {
+            "method": "auto_verified",
+            "note": "Verified in SKILL.md; the same survey's euro-adoption question is correctly excluded by _ESB_EXCLUDE_RE."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262914497",
+          "title": "Meirihluti aðildarfyrirtækjanna andvígur",
+          "url": "https://www.visir.is/g/20262914497d/meirihluti-adildarfyrirtaekjanna-andvigur",
+          "published_at": "2026-07-28T12:39:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "maskina-dv-2026-07",
+      "published": "2026-07-30",
+      "pollster": "Maskína",
+      "commissioned_by": "DV",
+      "population": "national",
+      "fieldwork": {
+        "from": "2026-07-22",
+        "to": "2026-07-29"
+      },
+      "questions": [
+        {
+          "framing": "referendum_vote",
+          "question_text": "Atkvæði í þjóðaratkvæðagreiðslunni 29. ágúst um framhald aðildarviðræðna",
+          "results": [
+            {
+              "answer": "Já",
+              "pct": 53.0,
+              "basis": "decided"
+            },
+            {
+              "answer": "Nei",
+              "pct": 47.0,
+              "basis": "decided"
+            },
+            {
+              "answer": "Já",
+              "pct": 43.8,
+              "basis": "all"
+            },
+            {
+              "answer": "Nei",
+              "pct": 38.9,
+              "basis": "all"
+            },
+            {
+              "answer": "Veit ekki",
+              "pct": 13.5,
+              "basis": "all"
+            },
+            {
+              "answer": "Vildu ekki svara",
+              "pct": 3.8,
+              "basis": "all"
+            }
+          ],
+          "extraction": {
+            "method": "auto_verified",
+            "note": "Verified in SKILL.md; bases confirmed by hand-read 2026-08-01."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262915377",
+          "title": "Meirihluti ætlar að segja já í ágúst",
+          "url": "https://www.visir.is/g/20262915377d/meirihluti-aetlar-ad-segja-ja-i-agust",
+          "published_at": "2026-07-30T13:52:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-2026-07-afram-island",
+      "published": "2026-08-06",
+      "pollster": "Gallup",
+      "commissioned_by": "Áfram Ísland",
+      "population": "national",
+      "fieldwork": {
+        "from": "2026-07-15",
+        "to": "2026-07-30"
+      },
+      "sample": {
+        "size": 1996,
+        "respondents": 804,
+        "response_rate_pct": 40.3
+      },
+      "questions": [
+        {
+          "framing": "referendum_vote",
+          "question_text": "Á Ísland að hefja á ný aðildarviðræður við Evrópusambandið?",
+          "results": [
+            {
+              "answer": "Já",
+              "pct": 46.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Nei",
+              "pct": 46.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Óákveðin",
+              "pct": 8.0,
+              "basis": "all"
+            }
+          ],
+          "breakdowns": [
+            "Reykjavík 55% fylgjandi; landsbyggðin 56% andvíg; Kraginn um 50% fylgjandi og rúm 40% á móti.",
+            "Viðreisn 93% og Samfylking 89% fylgjandi, Flokkur fólksins 70%.",
+            "Miðflokkur 95%, Sjálfstæðisflokkur 82% og Framsókn 69% ætla að segja nei."
+          ],
+          "extraction": {
+            "method": "hand_entered",
+            "note": "Neither source yields this poll automatically. RÚV states the topline cleanly but never tagged the article 'Skoðanakönnun', so discovery cannot list it (skodanakannanir SKILL.md, Caveat 7); Vísir lists it but words the result as one number covering two answers — 'Átta prósent segjast óákveðin en 46 prósent eru síðan á sitt hvorri hliðinni, já og nei' — which the extractor correctly declines to guess at. Read by hand from ruv-483052 on 2026-08-19."
+          }
+        }
+      ],
+      "caveats": [
+        "Commissioned by Áfram Ísland, a campaign organisation opposed to resuming talks. Gallup did the fieldwork; the commissioner belongs in every citation.",
+        "The 46/46 split is of ALL respondents, undecided included — not of those taking a stance, which is the basis Gallup's own þjóðarpúls and Maskína use. Plotting it in the same series as a decided-basis figure without saying so would overstate a swing that is partly a change of denominator.",
+        "Vísir's write-up says 'einungis 40% sem tóku afstöðu til spurningarinnar', which cannot be reconciled with 46+46=92% taking a stance; it looks like the 40,3% response rate restated. RÚV's figures are used here."
+      ],
+      "articles": [
+        {
+          "source": "ruv",
+          "id": "ruv-483052",
+          "title": "Hnífjafnt milli fylkinga",
+          "url": "https://www.ruv.is/frettir/innlent/2026-08-06-hnifjafnt-milli-fylkinga-483052",
+          "published_at": "2026-08-06T08:11:00"
+        },
+        {
+          "source": "visir",
+          "id": "visir-20262917613",
+          "title": "Hnífjafnt í nýrri könnun",
+          "url": "https://www.visir.is/g/20262917613d/hnifjafnt-i-nyrri-konnun",
+          "published_at": "2026-08-05T22:10:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "maskina-2026-08",
+      "published": "2026-08-13",
+      "pollster": "Maskína",
+      "commissioned_by": null,
+      "population": "national",
+      "fieldwork": {
+        "note": "Published 2026-08-13; window not stated in the coverage."
+      },
+      "questions": [
+        {
+          "framing": "referendum_vote",
+          "question_text": "Ætlar þú að segja já eða nei við því að Ísland hefji að nýju aðildarviðræður við Evrópusambandið?",
+          "results": [
+            {
+              "answer": "Já",
+              "pct": 52.2,
+              "basis": "decided"
+            },
+            {
+              "answer": "Nei",
+              "pct": 47.8,
+              "basis": "decided"
+            },
+            {
+              "answer": "Veit ekki",
+              "pct": 10.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Vildu ekki svara",
+              "pct": 3.1,
+              "basis": "all"
+            }
+          ],
+          "change": {
+            "vs": "2026-06",
+            "lead_pt_now": 4.4,
+            "lead_pt_then": 6.2,
+            "note": "Já lækkar um 0,9 stig frá júní (53,1), Nei hækkar um 0,9 (46,9). Breytingin er innan skekkjumarka. Í lok júlí mældist 53/47."
+          },
+          "breakdowns": [
+            "Rúmlega 61% þeirra sem taka afstöðu í Reykjavík ætla að segja já; tæp 53% í nágrannasveitarfélögunum.",
+            "Andstaðan mest á Austurlandi, þar sem tæp 63% ætla að segja nei.",
+            "Rúmlega 60% háskólamenntaðra ætla að segja já; tæp 57% þeirra með grunnskólapróf ætla að segja nei."
+          ],
+          "extraction": {
+            "method": "auto_verified",
+            "note": "Extractor returned Já 52,2 / Nei 47,8; confirmed against prose 2026-08-19 and the 4,4 stiga forskot matches the subtitle. 13,1% taka ekki afstöðu alls (10% veit ekki, 3,1% vilja ekki svara); Já/Nei á öllum svarendum var ekki birt, svo sá grunnur er ekki skráður."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "visir",
+          "id": "visir-20262920711",
+          "title": "Forskot Já-hliðarinnar mælist minna",
+          "url": "https://www.visir.is/g/20262920711d/forskot-ja-hlidarinnar-maelist-minna",
+          "published_at": "2026-08-13T18:31:00"
+        }
+      ]
+    },
+    {
+      "poll_id": "gallup-2026-08-thjodarpuls",
+      "published": "2026-08-14",
+      "pollster": "Gallup",
+      "commissioned_by": "Þjóðarpúls",
+      "population": "national",
+      "fieldwork": {
+        "from": "2026-08-01",
+        "to": "2026-08-13",
+        "note": "RÚV states it: 'Nýi þjóðarpúlsinn var gerður dagana 1.–13. ágúst.'"
+      },
+      "sample": {
+        "size": 4128,
+        "response_rate_pct": 41.9
+      },
+      "questions": [
+        {
+          "framing": "referendum_vote",
+          "question_text": "Atkvæði í þjóðaratkvæðagreiðslunni 29. ágúst um framhald aðildarviðræðna",
+          "results": [
+            {
+              "answer": "Já",
+              "pct": 51.5,
+              "basis": "decided"
+            },
+            {
+              "answer": "Nei",
+              "pct": 48.5,
+              "basis": "decided"
+            },
+            {
+              "answer": "Óákveðin",
+              "pct": 7.0,
+              "basis": "all"
+            },
+            {
+              "answer": "Vildu ekki svara",
+              "pct": 1.0,
+              "basis": "all"
+            }
+          ],
+          "margin_of_error_pt": 2.5,
+          "significance": "Munurinn er ekki tölfræðilega marktækur (vikmörk 2,5 prósentustig).",
+          "breakdowns": [
+            "14% þeirra sem segjast kjósa Miðflokkinn ætla að segja já, á móti 9% Sjálfstæðismanna.",
+            "Tæplega níu af hverjum tíu sem styðja ríkisstjórnina hyggjast segja já; 14% þeirra sem styðja hana ekki."
+          ],
+          "extraction": {
+            "method": "hand_corrected",
+            "note": "Extractor returned Já 48,5 / Nei 48,5 / Óákveðin 1,0 — it reused 48,5 for both sides and read the 1% 'vildi ekki svara' as undecided, missing the 7% óákveðin. Prose reads: '51,5% þeirra sem tóku afstöðu sögðust ætla að greiða atkvæði með og 48,5% þeirra á móti'. Corrected by hand 2026-08-19."
+          }
+        }
+      ],
+      "articles": [
+        {
+          "source": "ruv",
+          "id": "ruv-483977",
+          "title": "Nýr þjóðarpúls: Ekki marktækur munur á fylkingum",
+          "url": "https://www.ruv.is/frettir/innlent/2026-08-14-nyr-thjodarpuls-ekki-marktaekur-munur-a-fylkingum-483977",
+          "published_at": "2026-08-14T18:06:55.631203Z"
+        },
+        {
+          "source": "visir",
+          "id": "visir-20262921222",
+          "title": "Enginn marktækur munur á jáurum og neiurum",
+          "url": "https://www.visir.is/g/20262921222d/enginn-marktaekur-munur-a-jaurum-og-neiurum",
+          "published_at": "2026-08-14T18:33:00"
+        },
+        {
+          "source": "visir",
+          "id": "visir-20262921428",
+          "title": "Miðflokksmenn helmingi líklegri til að segja já en Sjálfstæðismenn",
+          "url": "https://www.visir.is/g/20262921428d/midflokksmenn-helmingi-liklegri-til-ad-segja-ja-en-sjalfstaedismenn",
+          "published_at": "2026-08-15T15:41:00"
+        },
+        {
+          "source": "ruv",
+          "id": "ruv-483994",
+          "title": "„Þjóðin er klofin í tvennt og afstaða fólks er að harðna“",
+          "url": "https://www.ruv.is/frettir/innlent/2026-08-14-thjodin-er-klofin-i-tvennt-og-afstada-folks-er-ad-hardna-483994",
+          "published_at": "2026-08-14T21:56:43.224797Z",
+          "role": "analysis companion, not a separate poll"
+        },
+        {
+          "source": "ruv",
+          "id": "ruv-483992",
+          "title": "Mikill meirihluti ákveðinn í afstöðu sinni",
+          "url": "https://www.ruv.is/frettir/innlent/2026-08-14-mikill-meirihluti-akvedinn-i-afstodu-sinni-483992",
+          "published_at": "2026-08-14T20:17:28.224730Z",
+          "role": "analysis companion, not a separate poll"
+        }
+      ]
+    }
+  ]
+}

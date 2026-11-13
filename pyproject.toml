@@ -2,7 +2,7 @@
 name = "hagstofan-data"
 version = "0.1.0"
 description = "Data processing for Icelandic statistics"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 dependencies = [
     "openpyxl>=3.1",
     "polars>=1.0",

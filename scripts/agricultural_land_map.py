@@ -4,7 +4,9 @@ Source: Náttúrufræðistofnun's 1:25.000 3rd-edition habitat raster
 ``vistgerdir:ni_vg25r_3utg_lzw`` (EPSG:3057, 5 m, band 1 = habitat code).
 ``scripts/natt.py`` fetches band 1 over WCS and writes an ISN93 ``==95`` mask;
 this script renders it. The polygon layer this map used until 2026-08 was
-withdrawn upstream — see ``.agents/skills/natt/SKILL.md``.
+withdrawn upstream — see ``.agents/skills/natt/SKILL.md``. The raster itself was
+withdrawn in 2026-11, so ``natt.py habitat`` can no longer rebuild the mask;
+this script renders whatever mask is already on disk.
 
 Run::
 

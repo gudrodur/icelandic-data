@@ -1224,8 +1224,11 @@ def fetch_visir_article(url: str, topic: str = "parties") -> dict:
 # the redirect target still work.
 HEIMILDIN_SEARCH_URL = "https://heimildin.is/leit/"
 
-_HEIMILDIN_ARTICLE_RE = re.compile(r'<article class="article-item[^"]*"[^>]*>(.*?)</article>', re.S)
+_HEIMILDIN_ARTICLE_RE = re.compile(
+    r'<article\b[^>]*\bclass="article-item[^"]*"[^>]*>.*?</article>', re.S
+)
 _HEIMILDIN_LINK_RE = re.compile(r'href="(/grein/\d+/[^"]*|/[a-zA-Z0-9_-]+/[^"]+/)"')
+_HEIMILDIN_GREIN_RE = re.compile(r'data-grein="(\d+)"')
 _HEIMILDIN_TITLE_RE = re.compile(r'<h[1-6] class="article-item__headline">([^<]+)</h[1-6]>')
 _HEIMILDIN_TIME_RE = re.compile(r'<time class="article-item__pubdate" datetime="([^"]+)"')
 _HEIMILDIN_SUBHEAD_RE = re.compile(
@@ -1233,12 +1236,24 @@ _HEIMILDIN_SUBHEAD_RE = re.compile(
 )
 
 
-def _heimildin_id(url_path: str) -> str:
+def _heimildin_id(
+    url_path: str,
+    grein_id: str | int | None = None,
+    article_html: str | None = None,
+) -> str:
+    # Prefer numeric article ID from data-grein when present to keep IDs stable
+    # across short-hash or URL path migrations (e.g. heimildin-21864)
+    if grein_id:
+        return f"heimildin-{str(grein_id).strip()}"
+    if article_html:
+        m = _HEIMILDIN_GREIN_RE.search(article_html)
+        if m:
+            return f"heimildin-{m.group(1)}"
     # /grein/23196/sjalfstaedisflokkurinn-.../ -> heimildin-23196
-    # /vn9x4/viktor-traustason-.../ -> heimildin-vn9x4
     m = re.search(r"/grein/(\d+)/", url_path)
     if m:
         return f"heimildin-{m.group(1)}"
+    # /vn9x4/viktor-traustason-.../ -> heimildin-vn9x4
     m = re.match(r"^/([a-zA-Z0-9_-]+)/", url_path)
     if m:
         return f"heimildin-{m.group(1)}"
@@ -1277,7 +1292,11 @@ def fetch_heimildin_article_list(
             title = unescape(title_m.group(1)).replace("\xad", "").strip()
             subtitle = unescape(subhead_m.group(1)).replace("\xad", "").strip() if subhead_m else None
             url = "https://heimildin.is" + link_m.group(1)
-            article_id = _heimildin_id(link_m.group(1))
+            grein_m = _HEIMILDIN_GREIN_RE.search(block)
+            article_id = _heimildin_id(
+                link_m.group(1),
+                grein_id=grein_m.group(1) if grein_m else None,
+            )
             seen[article_id] = {
                 "id": article_id,
                 "source": "heimildin",

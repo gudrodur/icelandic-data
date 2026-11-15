@@ -1225,7 +1225,7 @@ def fetch_visir_article(url: str, topic: str = "parties") -> dict:
 HEIMILDIN_SEARCH_URL = "https://heimildin.is/leit/"
 
 _HEIMILDIN_ARTICLE_RE = re.compile(r'<article class="article-item[^"]*"[^>]*>(.*?)</article>', re.S)
-_HEIMILDIN_LINK_RE = re.compile(r'href="(/grein/\d+/[^"]+)"')
+_HEIMILDIN_LINK_RE = re.compile(r'href="(/grein/\d+/[^"]*|/[a-zA-Z0-9_-]+/[^"]+/)"')
 _HEIMILDIN_TITLE_RE = re.compile(r'<h[1-6] class="article-item__headline">([^<]+)</h[1-6]>')
 _HEIMILDIN_TIME_RE = re.compile(r'<time class="article-item__pubdate" datetime="([^"]+)"')
 _HEIMILDIN_SUBHEAD_RE = re.compile(
@@ -1235,8 +1235,14 @@ _HEIMILDIN_SUBHEAD_RE = re.compile(
 
 def _heimildin_id(url_path: str) -> str:
     # /grein/23196/sjalfstaedisflokkurinn-.../ -> heimildin-23196
+    # /vn9x4/viktor-traustason-.../ -> heimildin-vn9x4
     m = re.search(r"/grein/(\d+)/", url_path)
-    return f"heimildin-{m.group(1)}" if m else f"heimildin-{url_path}"
+    if m:
+        return f"heimildin-{m.group(1)}"
+    m = re.match(r"^/([a-zA-Z0-9_-]+)/", url_path)
+    if m:
+        return f"heimildin-{m.group(1)}"
+    return f"heimildin-{url_path.strip('/')}"
 
 
 def fetch_heimildin_article_list(

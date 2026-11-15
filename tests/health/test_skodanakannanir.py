@@ -13,9 +13,10 @@ those markers directly rather than a schema.
 
 Contract, Heimildin: `leit/?q=...` (search) depends on being server-rendered
 HTML with `<article class="article-item">` cards carrying an `<h1
-class="article-item__headline">`, a `<time class="article-item__pubdate"
-datetime="...">`, and a `/grein/<id>/<slug>/` link. Same regex-over-markup
-contract as Vísir, different class names.
+class="article-item__headline">` (or `<h2>`), a `<time
+class="article-item__pubdate" datetime="...">`, and a `/grein/<id>/<slug>/` or
+`/<hash>/<slug>/` link. Same regex-over-markup contract as Vísir, different
+class names.
 
 Lightweight, not `browser`: `fetch`'s Playwright scrape of individual article
 pages (chart `aria-label` extraction, prose fallback) is not probed here, for

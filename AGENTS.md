@@ -198,7 +198,8 @@ uv run python scripts/kortagerð.py static --bounds capital --highlight "Reykjav
 
 # Náttúrufræðistofnun: habitat-type mask from the 5 m vistgerðir raster via WCS
 # (1:25.000 3rd ed.; DN=95 = L14.2 Tún og akurlendi, 1,806 km²)
-# The old LMI_vektor:vistgerd polygon layer was withdrawn in 2026 — raster only.
+# RETIRED 2026-11: both the LMI_vektor:vistgerd polygons (2026-08) and the 5 m raster were
+# withdrawn upstream, no successor; natt.py now exits with an explanation. Cached masks still render.
 # Fetch cost is server-bound and scales with output pixels — see --res below.
 uv run python scripts/natt.py habitat --dn 95            # 50 m ISN93 mask, ~2 min
 uv run python scripts/natt.py habitat --dn 95 --res 100  # ~1 min, still map-grade

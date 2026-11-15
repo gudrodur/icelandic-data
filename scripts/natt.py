@@ -1,5 +1,14 @@
 """Náttúrufræðistofnun open-data fetcher — habitat types ("vistgerðir").
 
+**RETIRED 2026-11: the raster below was withdrawn too.** Coverage
+``vistgerdir__ni_vg25r_3utg_lzw`` is gone from gis.natt.is (WCS answers
+``NoSuchCoverage``, WMS ``layer does not exist``) and no successor is published
+on gis.natt.is, gis.lmi.is or ogc.gis.is. ``habitat`` and ``inventory`` now exit
+with that explanation; masks already under ``data/raw/natt/vistgerdir/`` still
+feed ``agricultural_land_map.py``. The health probe watches for a
+republication. The text below documents the retired contract, kept so a revived
+raster can be wired back in by setting ``RETIRED = False``.
+
 **Raster-native since 2026-08.** NÍ withdrew the polygonised vector layer
 ``LMI_vektor:vistgerd`` (see the natt skill's caveats). The surviving publication
 of the same 3rd-edition 1:25.000 habitat map is the raster, served from the same
@@ -39,6 +48,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -59,6 +69,29 @@ WFS = f"{BASE}/wfs"
 # WCS uses `__` where WMS/WFS use `:` for the workspace separator.
 COVERAGE = "vistgerdir__ni_vg25r_3utg_lzw"
 WMS_LAYER = "vistgerdir:ni_vg25r_3utg_lzw"
+
+# True while the upstream raster is withdrawn (2026-11); see the module docstring.
+RETIRED = True
+
+
+def wcs_coverage_ids(capabilities_xml: str) -> list[str]:
+    """Coverage ids listed in a WCS 2.0.1 GetCapabilities document."""
+    return re.findall(r"<wcs:CoverageId>([^<]+)</wcs:CoverageId>", capabilities_xml)
+
+
+def habitat_raster_ids(coverage_ids: list[str]) -> list[str]:
+    """Ids that look like the vistgerðir 1:25.000 raster, under any edition."""
+    return [c for c in coverage_ids if re.search(r"vg25r|vistgerd", c, re.I)]
+
+
+def _refuse_if_retired() -> None:
+    if RETIRED:
+        raise SystemExit(
+            f"The habitat raster {COVERAGE} (WMS {WMS_LAYER}) was withdrawn from "
+            "gis.natt.is in 2026-11 with no successor, so this command "
+            "has nothing to fetch. Existing masks under data/raw/natt/vistgerdir/ "
+            "still work. See .agents/skills/natt/SKILL.md.")
+
 
 CRS = "EPSG:3057"
 NATIVE_RES_M = 5.0
@@ -227,6 +260,7 @@ def mask_path(dn: int, res_m: float) -> Path:
 # ── commands ─────────────────────────────────────────────────────────────
 
 def cmd_habitat(args: argparse.Namespace) -> None:
+    _refuse_if_retired()
     if args.format == "geojson":
         raise SystemExit(
             "GeoJSON output was retired in 2026-08: NÍ withdrew the polygon "
@@ -270,6 +304,7 @@ def cmd_habitat(args: argparse.Namespace) -> None:
 
 
 def cmd_inventory(_: argparse.Namespace) -> None:
+    _refuse_if_retired()
     pairs = legend()
     out = RAW / "inventory.csv"
     out.parent.mkdir(parents=True, exist_ok=True)

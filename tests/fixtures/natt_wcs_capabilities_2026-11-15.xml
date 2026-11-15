@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- gis.natt.is WCS 2.0.1 GetCapabilities, 2026-11-15: ServiceMetadata/Contents trimmed to the CoverageId lines. No vistgerdir__ni_vg25r_* coverage is listed. -->
+<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0" version="2.0.1"><wcs:Contents>
+  <wcs:CoverageSummary><wcs:CoverageId>High_Resolution_Layer__Dominant_Leaf_Type</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>High_Resolution_Layer__Grassland</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>ramma__Hnotasteinn__fb_norm_v4</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>ramma__Hrutmulavirkjun__fb_norm_v4</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>High_Resolution_Layer__Imperviousness</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__T16_20210309-20210315_w_epsg3857</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__ISL_air-density_50m_3057</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__Near_East_velocities_2015_2018</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__E_EGMS_L3_2018_2022_1</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__Near_Up_velocities_2015_2018</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__U_EGMS_L3_2018_2022_1</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__ISL_power-density_50m_3057</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>ramma__Solheimar__fb_norm_v4</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__TRI_IslandsDEM</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__TPI_IslandsDEM</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>High_Resolution_Layer__Tree_Cover_Density</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__ISL_wind-speed_50m_3057</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>High_Resolution_Layer__Water_and_Wetness</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__islandsdem_skuggar_50m</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>lbhi__nytjaland</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__solarlysingu_landslagi_uppsafnad_arlegt</wcs:CoverageId></wcs:CoverageSummary>
+  <wcs:CoverageSummary><wcs:CoverageId>LMI_raster__islandsdem_hillshade_10m</wcs:CoverageId></wcs:CoverageSummary>
+</wcs:Contents></wcs:Capabilities>

@@ -36,9 +36,16 @@ Habitat types ("vistgerðir") are NÍ's national EUNIS-aligned classification.
 There are 64 land-, 17 freshwater-, and 24 coastal-shore habitat types,
 documented in Fjölrit 54.
 
-**The 3rd edition is a raster.** The polygonised vector edition
-`LMI_vektor:vistgerd` was withdrawn in 2026 (see Caveats) — the surviving
-national-coverage publication is:
+**RETIRED 2026-11: the raster was withdrawn as well.** `vistgerdir__ni_vg25r_3utg_lzw`
+is gone from gis.natt.is (WCS `NoSuchCoverage`, WMS "layer does not exist"), and
+no successor is listed in the WCS/WMS/WFS capabilities of gis.natt.is, gis.lmi.is
+or ogc.gis.is. `scripts/natt.py habitat|inventory` now exit with that message;
+`tests/health/test_natt.py` fails only if a habitat raster reappears. The table
+below records the retired contract.
+
+The 3rd edition was a raster. The polygonised vector edition
+`LMI_vektor:vistgerd` was withdrawn in 2026-08 (see Caveats); the national-coverage
+raster, until 2026-11, was:
 
 | Service | Name | Notes |
 |---|---|---|

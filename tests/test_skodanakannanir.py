@@ -10,6 +10,8 @@ Run: uv run pytest tests/test_skodanakannanir.py -q
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from scripts import skodanakannanir as s
 
 
@@ -361,3 +363,56 @@ def test_guess_topic_referendum_campaign_vocabulary():
         )
         == "esb"
     )
+
+
+# --------------------------------------------------------------------------
+# Heimildin search markup fixture tests
+# --------------------------------------------------------------------------
+
+HEIMILDIN_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "heimildin_search_2026-11-15.html"
+)
+
+
+def test_heimildin_search_markup_fixture():
+    """Offline guard for Heimildin search result card structure.
+
+    Heimildin shortened article URLs from /grein/<id>/<slug>/ to /<hash>/<slug>/
+    in late 2026 and uses <h2 class="article-item__headline">.
+    Verifies article cards match link, title, and pubdate regexes.
+    """
+    html = HEIMILDIN_FIXTURE.read_text(encoding="utf-8")
+    blocks = s._HEIMILDIN_ARTICLE_RE.findall(html)
+    assert len(blocks) == 2
+
+    # Block 0: /vn9x4/.../
+    b0 = blocks[0]
+    link0 = s._HEIMILDIN_LINK_RE.search(b0)
+    assert link0, "Block 0 link must match"
+    assert link0.group(1) == "/vn9x4/viktor-traustason-tekur-litid-mark-a-skodanakonnunum/"
+    title0 = s._HEIMILDIN_TITLE_RE.search(b0)
+    assert title0, "Block 0 title must match"
+    assert "Viktor Trausta" in title0.group(1)
+    time0 = s._HEIMILDIN_TIME_RE.search(b0)
+    assert time0, "Block 0 time must match"
+    assert time0.group(1) == "2024-05-13 21:00"
+    subhead0 = s._HEIMILDIN_SUBHEAD_RE.search(b0)
+    assert subhead0, "Block 0 subhead must match"
+    assert "Viktor Trausta" in subhead0.group(1)
+
+    # Block 1: /y8fys/.../
+    b1 = blocks[1]
+    link1 = s._HEIMILDIN_LINK_RE.search(b1)
+    assert link1, "Block 1 link must match"
+    assert link1.group(1) == "/y8fys/svona-er-afstada-thjodarinnar-i-lykilmalum-samkvaemt-skodanakonnunum-arsins-2022/"
+    title1 = s._HEIMILDIN_TITLE_RE.search(b1)
+    assert title1, "Block 1 title must match"
+    assert "Svona er afstaða" in title1.group(1)
+    time1 = s._HEIMILDIN_TIME_RE.search(b1)
+    assert time1, "Block 1 time must match"
+    assert time1.group(1) == "2022-12-24 08:34"
+
+    # ID generation: supports both new short hashes and legacy /grein/<id>/
+    assert s._heimildin_id(link0.group(1)) == "heimildin-vn9x4"
+    assert s._heimildin_id(link1.group(1)) == "heimildin-y8fys"
+    assert s._heimildin_id("/grein/23196/sjalfstaedisflokkurinn/") == "heimildin-23196"

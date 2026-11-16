@@ -182,6 +182,12 @@ var commandStart = (words) => {
       i++;
       continue;
     }
+    if (w === "exec") {
+      i++;
+      while (i < words.length && /^-[acl]+$/.test(words[i]))
+        i += words[i].includes("a") ? 2 : 1;
+      continue;
+    }
     if (w === "env" || PREFIX_WORDS.has(w)) {
       i++;
       continue;
@@ -275,6 +281,44 @@ var autogenMask = (lines) => {
   });
   return mask;
 };
+var LOCAL_READ_TOOLS = new Set([
+  "ls",
+  "test",
+  "[",
+  "grep",
+  "jq",
+  "git",
+  "cat",
+  "wc",
+  "head",
+  "tail",
+  "sort",
+  "uniq",
+  "cut",
+  "tr",
+  "awk",
+  "sed",
+  "stat",
+  "readlink",
+  "find",
+  "cmp",
+  "diff",
+  "printf",
+  "basename",
+  "dirname",
+  "echo",
+  "node",
+  "rg",
+  "exit",
+  "true",
+  "false",
+  ":"
+]);
+var NETWORK_TOOLS = new Set(["gh", "gcloud", "gsutil", "bq", "curl", "wget", "ssh", "scp", "rsync", "wrangler", "firebase", "npx", "pnpm", "npm"]);
+var CONTAINER_TOOLS = new Set(["podman", "docker"]);
+var BUILTINS = new Set(["test", "[", "echo", "printf", "exit", "true", "false", ":"]);
+var onPathMemo = new Map;
+var GIT_READ = new Set(["log", "show", "diff", "rev-parse", "ls-files", "grep", "cat-file", "status", "rev-list", "for-each-ref"]);
 var LIST_KEYWORDS = new Set(["for", "case", "select"]);
 var CLOSERS = new Set(["done", "fi", "esac", "}", ")"]);
 var TESTERS = new Set(["if", "while", "until", "elif", "!"]);

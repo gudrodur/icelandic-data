@@ -29,11 +29,18 @@ import argparse
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
+try:
+    import geopandas  # noqa: F401  — Tier 1 (maps) sentinel
+except ImportError:
+    raise SystemExit(
+        "This script needs the maps tier (geopandas, rasterio, matplotlib). "
+        "Install it with: uv sync --group maps   (see AGENTS.md 'Requirement tiers')"
+    ) from None
+
 import geopandas as gpd
-import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 from rasterio.warp import calculate_default_transform, reproject
@@ -41,7 +48,12 @@ from rasterio.warp import calculate_default_transform, reproject
 # Make ``utils.cache`` importable when running as ``python scripts/build_cache.py``.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.cache import (  # noqa: E402
-    ARRAYS_DIR, CACHE, CONSTANTS_PATH, RASTERS_DIR, ROOT, sha256_file,
+    ARRAYS_DIR,
+    CACHE,
+    CONSTANTS_PATH,
+    RASTERS_DIR,
+    ROOT,
+    sha256_file,
 )
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -71,7 +83,7 @@ HRL_SOURCES: dict[str, dict] = {
 # ── helpers ──────────────────────────────────────────────────────────────
 
 def _now() -> str:
-    return datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
 
 def _load_existing_constants() -> dict:
@@ -109,8 +121,8 @@ def _iceland_total_area_km2() -> tuple[float, dict]:
 
 def _bbox_in_other_crses(bbox_3057: list[float]) -> dict:
     """Reproject the Iceland landmask bbox into a few common CRSes."""
-    from shapely.geometry import box
     from pyproj import Transformer
+    from shapely.geometry import box
 
     geom = box(*bbox_3057)
     out: dict[str, list[float]] = {"EPSG:3057": list(bbox_3057)}
@@ -283,7 +295,7 @@ def _status_line(label: str, exists: bool, *, hint: str = "") -> str:
 def cmd_status(_: argparse.Namespace) -> None:
     print(f"Cache root: {CACHE.relative_to(ROOT) if CACHE.exists() else 'data/cache'}\n",
           file=sys.stderr)
-    print(_status_line(f"constants.json", CONSTANTS_PATH.exists(),
+    print(_status_line("constants.json", CONSTANTS_PATH.exists(),
                        hint="→ build_cache.py constants"))
     if CONSTANTS_PATH.exists():
         K = json.loads(CONSTANTS_PATH.read_text(encoding="utf-8"))

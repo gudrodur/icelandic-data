@@ -1,60 +1,49 @@
 """Health probe — Tekjusagan (Forsætisráðuneytið).
 
-History: until 2026-10-15 the SPA embedded a token-gated Power BI report and
-this probe checked the token endpoint (GET /api/report/<id> -> {id, embedToken}).
-The SPA was rebuilt without Power BI; that URL now returns the SPA index
-(text/html) and the bundles carry no token code. The data is served by an open
-JSON backend instead (found in the lazy chunks, 2026-10-19):
+Since an October 2026 redeploy the SPA charts JSON from its own backend,
+`POST /api/sqlseries/<queryId>` with the group filters as the body — the
+Power BI embed and its `/api/report/<id>` token endpoint are gone (that path
+now falls through to the SPA's index.html with a 200).
 
-    POST https://tekjusagan.is/api/sqldata/<procedure>   flat JSON filters
-    POST https://tekjusagan.is/api/sqlseries/<queryId>
+The contract is the stored-procedure call itself: a queryId, its exact
+parameter set, and the `items` row shape. Each failure mode answers
+distinctly — a dropped/renamed procedure gives 400 "not available as a
+series", a changed parameter list gives 400 "expects parameter '@X'" / "too
+many arguments", and a dead backend falls back to text/html.
 
-The contract probed here is the smallest of those calls
-(scripts.tekjusagan.PROBE_ENDPOINT): JSON in, JSON with a non-empty `items`
-list out. The SPA routes themselves are deliberately *not* probed: it is an
-Angular app, so every route — including ones that no longer exist — returns the
-same 200 index.html, and a probe over them would be green by construction.
+The SPA routes are deliberately *not* probed: every route of the Angular app,
+including ones that no longer exist, returns the same 200 index.html.
 """
 from __future__ import annotations
 
 import pytest
 
-from scripts.tekjusagan import API_URL, PROBE_ENDPOINT, PROBE_PAYLOAD
+from scripts.tekjusagan import LAST_TAX_YEAR, SERIES, SERIES_URL
+
+ROW_KEYS = {"Skattár", "Breyta Heiti", "Breyta Lýsing", "Breyta Röðun", "Breytugildi ISK", "Breytugildi Prósenta"}
 
 
-@pytest.fixture(scope="module")
-def answer(http):
-    r = http.post(PROBE_ENDPOINT, json=PROBE_PAYLOAD)
-    assert r.status_code == 200, (
-        f"{PROBE_ENDPOINT} -> {r.status_code}: {r.text[:200]} "
-        f"(the SPA was rebuilt once already on 2026-10-15 — re-derive the route "
-        f"from the lazy chunks listed in index.html)"
+@pytest.mark.parametrize("slug", list(SERIES))
+def test_series_returns_rows_for_the_spa_defaults(http, slug):
+    s = SERIES[slug]
+    r = http.post(
+        SERIES_URL.format(query_id=s["query_id"]),
+        params={"from": LAST_TAX_YEAR - 1, "to": LAST_TAX_YEAR},
+        json=s["body"],
     )
+    assert r.status_code == 200, f"{r.request.url} -> {r.status_code}: {r.text[:200]}"
     assert r.headers["content-type"].startswith("application/json"), (
-        f"{PROBE_ENDPOINT} -> {r.headers['content-type']}, not JSON — the API "
-        f"route moved and the SPA index is answering instead"
+        f"{r.request.url} -> {r.headers['content-type']} (SPA fallback — API route moved?)"
     )
-    return r.json()
-
-
-def test_data_api_answers_json(answer):
-    assert answer.get("success") is True, f"success flag not set; got {str(answer)[:200]}"
-    assert isinstance(answer.get("items"), list), f"no items list; got {sorted(answer)}"
-
-
-def test_data_api_returns_a_headcount(answer):
-    """A value, not just a 200 — an empty items list means the procedure's
-    parameter names or filter vocabulary changed and every query returns 0 rows."""
-    items = answer["items"]
-    assert items, "items is empty for IncomeGroup=3, Year=1991 — filter vocabulary changed?"
-    assert items[0].get("Heildarfjöldi", 0) > 1000, f"implausible headcount: {items[0]}"
+    items = r.json()["items"]
+    assert items, f"{r.request.url} -> 0 rows for the SPA's own default filters"
+    assert ROW_KEYS <= set(items[0]), f"row keys changed: {sorted(items[0])}"
+    assert {i["Skattár"] for i in items} == {LAST_TAX_YEAR - 1, LAST_TAX_YEAR}
 
 
 @pytest.mark.degraded_ok
-def test_backend_rejects_missing_parameters(http):
-    """Guards against the probe above passing by construction: the backend must
-    still validate its inputs (an SQL procedure missing a parameter -> 400). If
-    it starts answering 200 to an empty body, a 200 above proves less.
-    degraded_ok — this tests the API's manners, not whether our data is reachable."""
-    r = http.post(f"{API_URL}GenderEducationGroups", json={})
-    assert r.status_code != 200, f"empty body accepted -> 200: {r.text[:200]}"
+def test_backend_rejects_an_unknown_series(http):
+    """Guards the probe above: if any queryId got 200, a renamed procedure
+    would go unnoticed. degraded_ok — this tests the API's manners."""
+    r = http.post(SERIES_URL.format(query_id="NoSuchSeries"), params={"from": 2024, "to": 2024}, json={})
+    assert r.status_code == 400, f"{r.request.url} -> {r.status_code} for a nonexistent series"

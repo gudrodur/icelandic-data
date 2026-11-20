@@ -5,6 +5,8 @@ description: Icelandic registered unemployment, job seekers and work permits (Vi
 
 # Vinnumálastofnun — Directorate of Labour (VMST)
 
+**Requires:** Tier 0 (core) for the Excel files; Tier 2 (browser) for the Power BI capture.
+
 Unemployment, job vacancies, and work-permit statistics. Monthly data with a rolling multi-year window. The Hagtalnanefnd report (March 2026) explicitly cites VMST's *mælaborð, Excel and PDF* triple-publication pattern.
 
 ## Landing page
@@ -31,8 +33,16 @@ Scrape with the Playwright-intercept pattern (same as `landlaeknir`, `ferdamalas
 ### 2. Excel — "Helstu talnagögn um atvinnuleysi"
 
 ```
-https://assets.ctfassets.net/8k0h54kbe6bj/688FRtXuoA4qkPXerKcuMT/e6b9794d1bdfcf5cb5747a46b9b3d836/Talnagogn_atvinnuleysi.xlsm
+https://assets.ctfassets.net/8k0h54kbe6bj/6gixO2P4GNuFy7wwTY5ZkE/9abbb476210aab3ee0fadffcfda80566/Talnagogn_atvinnuleysi.xlsm
 ```
+
+Contentful serves each monthly upload at a fresh content-addressed URL and
+**old URLs keep resolving forever**, so a pinned URL silently serves a stale
+workbook instead of 404ing (the previous URL in this file was the August 2026
+upload; the one above is September 2026). The current URL is whatever the
+landing page links; `scripts/vinnumalastofnun.py` holds the constant and
+`tests/health/test_vinnumalastofnun.py` reports `degraded` when the two drift.
+The workbook's `Yfirlit!A3` cell ("Uppfært í september 2026") is the vintage.
 
 Monthly unemployment time-series workbook. Updated when monthly reports are published (typically second week of the following month). Direct download via httpx — no auth, no scraping.
 
@@ -82,3 +92,7 @@ uv run python scripts/vinnumalastofnun.py powerbi
 |--------|---------|
 | [hagstofan](../hagstofan/SKILL.md) | ILO unemployment via labour-force survey (VIN01101, VIN01000) |
 | [opnirreikningar](../opnirreikningar/SKILL.md) | VMST benefit payments appear in government invoice data |
+
+## Validated records export
+
+`uv run python scripts/vinnumalastofnun.py records` (default `--out data/processed/vinnumalastofnun_records.json`) resolves the current workbook link on the official landing page (no static fallback), archives its SHA-256, and exports G2 monthly-average regional rates in percent and G4 month-end duration counts. Rates and month-end counts have different denominators and timing. Source-native group/label keys are retained. Blank cells are omitted, never converted to zero. The latest national duration bands must sum to the total. Updates are monthly, normally the following month; a successful fetch is not a new observation.

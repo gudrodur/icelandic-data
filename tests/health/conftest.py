@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pathlib
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -137,16 +137,18 @@ class PowerBIPublicEmbed:
 
     @staticmethod
     def sections(payload: dict) -> dict[str, str]:
-        """{sectionName: displayName} — the report's pages.
-
-        Power BI renamed a section's `name` to `objectName` around 2026-09-12
-        (the same `ReportSection…` value); read either, so the probe checks the
-        page and not the payload's spelling.
-        """
-        return {
-            s.get("name") or s["objectName"]: s.get("displayName", "")
-            for s in payload.get("exploration", {}).get("sections", [])
-        }
+        """{sectionName: displayName} — the report's pages."""
+        sections = {}
+        for section in payload.get("exploration", {}).get("sections", []):
+            # Power BI renamed this field in September 2026. Keep accepting
+            # the old schema because public embeds are not upgraded in sync.
+            name = section.get("name") or section.get("objectName")
+            assert name, (
+                "Power BI section has neither name nor objectName; got "
+                f"{sorted(section)}"
+            )
+            sections[name] = section.get("displayName", "")
+        return sections
 
     @staticmethod
     def last_refresh(payload: dict) -> datetime:
@@ -169,11 +171,11 @@ def assert_fresh(observed, max_age, *, label: str) -> None:
     reports as degraded rather than failing the scheduled run. An upstream that
     is up but three days behind is a different problem from one that is down.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if observed.tzinfo is None:
-        observed = observed.replace(tzinfo=timezone.utc)
+        observed = observed.replace(tzinfo=UTC)
     age = now - observed
     assert age <= max_age, (
         f"{label} is stale: latest observation {observed.isoformat()} "

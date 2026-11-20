@@ -5,6 +5,8 @@ description: Hagstofan / Statistics Iceland PX-Web API. Use for Icelandic nation
 
 # Hagstofan (Statistics Iceland)
 
+**Requires:** Tier 0 (core).
+
 Official statistics for Iceland via PX-Web API.
 
 ## API
@@ -103,6 +105,19 @@ budget balance (e.g. the 2008–2011 crisis deficits) comes from these tables.
 `scripts/hagstofan_rikissjod.py fetch` builds
 `data/processed/rikissjod_balance.csv` (all years, wide, m.kr).
 
+### Wages, employment and housing by municipality
+
+| Table | Path under `/is/` | Notes |
+|---|---|---|
+| `TEK01002` | `Samfelag/launogtekjur/3_tekjur/1_tekjur_skattframtol` | Income by sveitarfélag (1 Jan 2026 layout), 1990–2025. Codes: Tekjur og skattar 1=Atvinnutekjur, 5=Ráðstöfunartekjur; Eining 0=mean skilyrt, 2=median skilyrt, 4=count. Thousand kr/year. Includes part-time and part-year earners. |
+| `TEK01007` | same | Percentiles (10–99%) of atvinnutekjur by age (`Y25-64` etc.), national, 1990–2025. |
+| `TEK02003` | `Samfelag/launogtekjur/3_tekjur/0_stadgreidsla` | Monthly withholding wage payments (m.kr.) and persons paid, by **búseta incl. every municipality** and industry, 2008–. Full municipal names (e.g. `Reykjavíkurborg`, `Akureyrarbær`). Amount ÷ persons gives wage per paid month. |
+| `VIN10012` | `Samfelag/vinnumarkadur/vinnuaflskraargogn` | Employed by residence (landshluti + municipality), monthly 2003–; Bakgrunnur erlendur/íslenskur. Borgarbyggð and Skorradalshreppur reported together. |
+| `VIN01104` | `Samfelag/vinnumarkadur/vinnumarkadsrannsokn/3_arstolur` | LFS: full-time share and hours, Reykjavík / nágrenni / utan höfuðborgarsvæðis, 1991–2025. |
+| `VIN02002` | `Samfelag/launogtekjur/1_laun/1_laun` | Wage survey: full-time regular/total wages, national, 2014–2025. |
+| `SAM01603` | `Atvinnuvegir/ferdathjonusta/Gisting/3_allartegundirgististada` | Guest nights, all registered accommodation, **by municipality**, 1998–2025; dims include Mánuður (0 = whole year). Suppressed cells (`..`): Garðabær 2019–24, Kjósarhreppur 2024. |
+| `LFI03305`, `LIF03307`, `LIF03217` | `Samfelag/lifskjor/4_husnaedismal/...` | SILC housing-cost overburden by tenure / income quintile, tenure by area; series end 2021–22. |
+
 ## Tariff Codes (Bikes/E-bikes)
 
 Classification changed in 2020:
@@ -155,3 +170,65 @@ Classification changed in 2020:
      metadata `valueTexts` in the same order as its `values`.
    - Some tables use a "total" code: THJ95200 has month code `0` = annual
      total (months are `1`–`12`).
+
+## Generic labelled query CLI — start here for any table
+
+```bash
+uv run python scripts/hagstofan_query.py list                      # root catalogue
+uv run python scripts/hagstofan_query.py list Ibuar/buferlaflutningar/buferlaflmillilanda
+uv run python scripts/hagstofan_query.py list  <path>/MAN01400.px  # variables + full notes + ready-to-run fetch
+uv run python scripts/hagstofan_query.py notes <path>/MAN01400.px  # the notes, readable
+uv run python scripts/hagstofan_query.py fetch <path>/MAN01400.px --filters '{"Kyn":["0"]}' --since 2015 --out out.json
+```
+
+Browse it like hypermedia: every listing item carries `path` (pass it straight
+back) and `next` (the command to run). A category listing enriches each table
+with `last_updated`, `notes_count`, `value_notes_count`, a `note_preview` and
+methodology `links`, so caveats are in view **before** anything is fetched. A
+table listing returns the variables plus the full notes and an example `fetch`.
+
+`fetch` writes long-form records with original dimension codes and labels,
+preserves nulls, and puts the table's own documentation next to `rows`:
+
+| Field | Source | Meaning |
+|---|---|---|
+| `last_updated` | px `LAST-UPDATED` | **The real publication stamp.** json-stat2 `updated` is the table's creation date (VIN01002 says 2017, MAN01400 says 2018) — never use it. |
+| `notes` | px `NOTE`, `NOTE[en]` | Table caveats as paragraphs, keyed by language. Revision dates, definitional breaks, methodology. |
+| `value_notes` | px `VALUENOTE` | Per-value caveats, keyed by value **label** (not code). Only returned for values in the selection. |
+| `links` | hrefs in notes | Methodology PDFs (greinargerð) on hagstofas3bucket. |
+| `units`, `refperiod`, `creation_date` | px header | |
+| `fetched_at`, `raw_sha256` | this script | |
+
+Only the native `px` response format serialises those headers — json-stat2
+gives `note: null` — so `fetch` makes one json-stat2 request for the data and
+one `px` request for the header, with the same selection. The px body is UTF-8
+with a BOM even though the HTTP header says Windows-1252; the script decodes
+by the file's own `CODEPAGE`.
+
+**Vintage.** Every fetch appends a line to `data/raw/hagstofan/query/index.jsonl`
+(`fetched_at`, `path`, `filters`, `since`, `last_updated`, `raw_sha256`). The
+vintage of a dataset is `(path, last_updated)`; two fetches of the same table
+with different hashes are a revision, and both raw responses are still on disk:
+
+```bash
+uv run python scripts/sql.py "SELECT path, last_updated, count(DISTINCT raw_sha256) AS versions, min(fetched_at), max(fetched_at)
+  FROM read_json_auto('data/raw/hagstofan/query/index.jsonl') GROUP BY 1,2 ORDER BY 1,2"
+```
+
+**Curated scripts carry the same documentation.** Every curated Hagstofan
+script (`hagstofan_cpi.py`, `hagstofan_income.py`, `hagstofan_population_wages.py`,
+`hagstofan_rikissjod.py`, `hagstofan.py`, `housing_completions.py`,
+`income_distribution.py`) writes a `data/processed/{output stem}.meta.json`
+sidecar next to its primary output — a JSON object keyed by table code with
+`path`, `last_updated`, `fetched_at`, `units`, `refperiod`, `notes`,
+`value_notes` and `links`, fetched with the same selection as the data — and
+appends every data POST to the shared `index.jsonl` above, so the vintage
+query covers curated outputs too. Each run prints one stderr breadcrumb per
+table (`VIS01300: last updated 2026-08-27T09:00, 3 notes`); a header failure
+is printed and skipped, never fatal to the data.
+
+Known note quirks: some English notes have an unterminated `<A HREF=... TARGET=_`
+anchor upstream, so the sentence after the link runs on; the script strips the
+tag and keeps the href in `links`.
+
+Current VIS01300 uses CP01–CP13. CP12 is insurance/financial services, CP13 personal care/social protection/other services. `hagstofan_cpi.py` keeps CP12/CP13 current-only because old IS12 is not comparable. It preserves previous output and exits nonzero if any fetch fails. Other historical category concordances still need care.

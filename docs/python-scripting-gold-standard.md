@@ -32,7 +32,7 @@ should be visible in a comment, not silent.
   Single-purpose processors may have no subcommands, but they still get a real
   argparse main with options and `--help` derived from the module docstring.
 - Bare `python scripts/x.py` (no args) must do the useful default thing — that
-  is what AGENTS.md quick commands invoke.
+  is what docs/quick-commands.md invokes.
 - Exit non-zero on total failure; a partial failure prints what failed.
 - `argparse.ArgumentParser(description=__doc__)` — one source of truth for help.
 

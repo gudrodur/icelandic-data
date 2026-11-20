@@ -136,7 +136,7 @@ Python (managed by `uv`; Tier 0 unless noted):
 
 ## Quick Commands
 
-Per-source fetch and process commands (one block per dataset) live in [docs/quick-commands.md](docs/quick-commands.md). Read it before running or adding a source command; every skill in `.agents/skills/` also names its own commands.
+Per-source fetch and process commands (one block per dataset) live in [docs/quick-commands.md](docs/quick-commands.md). Read it before running or adding a source command; most skills in `.agents/skills/` also name its own commands.
 
 ## Tests and source health
 

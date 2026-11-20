@@ -44,7 +44,7 @@ Code, and `CLAUDE.md` symlinks to `AGENTS.md`. One set of files, both agents.
 Currently 56 skills covering national statistics, government dashboards
 (_mælaborð_), regulatory filings, and utility APIs. Each skill's frontmatter
 `description` is its index entry — run `ls .agents/skills/` to enumerate them, and see
-[`AGENTS.md`](AGENTS.md) for the quick-commands reference.
+[`docs/quick-commands.md`](docs/quick-commands.md) for the quick-commands reference.
 
 The light in each row is that source's current verdict, refreshed daily and finer-grained
 than the badge above (which waits a full week before going red):
@@ -238,7 +238,7 @@ uv run python scripts/landlaeknir.py fetch --slug mortis
 uv run python scripts/velsaeldarvisar.py fetch
 ```
 
-See [AGENTS.md](AGENTS.md) for the full command catalog across every skill.
+See [docs/quick-commands.md](docs/quick-commands.md) for the full command catalog across every skill.
 
 ## Tests
 

@@ -42,7 +42,7 @@ var repoRootOf = (metaUrl) => path.resolve(path.dirname(fileURLToPath2(metaUrl))
 var resolveRoot = (metaUrl) => envRoot() ?? repoRootOf(metaUrl ?? import.meta.url);
 
 // engine/lib/doc-scope.mjs
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
@@ -165,13 +165,14 @@ var shellWords = (segment) => {
     words.push(cur);
   return words;
 };
-var PREFIX_WORDS = new Set(["sudo", "command", "exec", "nohup", "time", "then", "do", "else", "!", "{", "("]);
+var PREFIX_WORDS = new Set(["sudo", "command", "exec", "nohup", "time", "then", "do", "else", "if", "while", "until", "!", "{", "("]);
+var OPENERS_RE = /^(?:\$\(|[({`])+/;
 var ASSIGNMENT_RE = /^[A-Za-z_]\w*=/;
 var commandStart = (words) => {
   const env = {};
   let i = 0;
   while (i < words.length) {
-    const w = words[i].replace(/^[({]+/, "");
+    const w = words[i].replace(OPENERS_RE, "");
     if (w === "") {
       i++;
       continue;
@@ -192,6 +193,12 @@ var commandStart = (words) => {
       i++;
       continue;
     }
+    if (w === "nice" || w === "ionice" || w === "xargs") {
+      i++;
+      while (i < words.length && /^-/.test(words[i]))
+        i += /^-[nc]$/.test(words[i]) ? 2 : 1;
+      continue;
+    }
     if (w === "timeout") {
       i++;
       while (i < words.length && /^(-\S+|\d+(\.\d+)?[smhd]?)$/.test(words[i]))
@@ -204,7 +211,7 @@ var commandStart = (words) => {
 };
 var commandWord = (words) => {
   const { index } = commandStart(words);
-  return index < 0 ? "" : words[index].replace(/^[({]+/, "");
+  return index < 0 ? "" : words[index].replace(OPENERS_RE, "");
 };
 
 // engine/lib/doc-scope.mjs
@@ -368,24 +375,58 @@ var checkQuerySegments = (run, tools = LOCAL_TOOLS) => {
   return { ok: true };
 };
 var clip200 = (s) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
-var runCommand = (run, { root, timeoutMs }) => {
-  try {
-    const stdout = execFileSync("bash", ["-c", run], {
-      cwd: root,
-      encoding: "utf8",
-      timeout: timeoutMs,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    return { ok: true, stdout };
-  } catch (err) {
-    const out = clip200((err.stdout ?? "") + " " + (err.message ?? ""));
-    const timedOut = /ETIMEDOUT|timed out/i.test(String(err.message ?? ""));
-    return {
-      ok: false,
-      timedOut,
-      output: timedOut ? `timed out after ${timeoutMs} ms ${out}`.trim() : out || "exit without output"
-    };
+var lastPipelineStages = (run) => {
+  const segs = splitSegmentsDetailed(run).filter((s) => s.text.trim() !== "");
+  let start = segs.length - 1;
+  while (start > 0 && segs[start].sep === "|")
+    start--;
+  return segs.slice(start).map((s) => s.text.trim());
+};
+var SIGPIPE_STATUS = 141;
+var deadStage = (run, statuses) => {
+  const stages = lastPipelineStages(run);
+  const known = stages.length === statuses.length;
+  for (let i = 0;i < statuses.length - 1; i++) {
+    const st = statuses[i];
+    if (st < 2 || st === SIGPIPE_STATUS)
+      continue;
+    const word = known ? commandWord(shellWords(stages[i])) : "";
+    const cmd = LIST_KEYWORDS.has(word) || CLOSERS.has(word) ? "" : word;
+    return `stage ${i + 1}${cmd ? ` (${cmd})` : ""} exited ${st}`;
   }
+  return "";
+};
+var runCommand = (run, { root, timeoutMs, failOnStderr = false, deadStages = false }) => {
+  const script = deadStages ? `${run}
+__lv_ps=("\${PIPESTATUS[@]}")
+printf '%s ' "\${__lv_ps[@]}" >&3
+exit "\${__lv_ps[$((\${#__lv_ps[@]} - 1))]}"` : run;
+  const r = spawnSync("bash", ["-c", script], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: timeoutMs,
+    stdio: ["ignore", "pipe", "pipe", ...deadStages ? ["pipe"] : []]
+  });
+  if (!r.error && r.status === 0) {
+    if (failOnStderr && r.stderr.trim())
+      return { ok: false, timedOut: false, output: clip200(`stderr: ${r.stderr}`) };
+    if (deadStages) {
+      const statuses = String(r.output?.[3] ?? "").trim().split(/\s+/).filter(Boolean).map(Number);
+      const dead = statuses.length ? deadStage(run, statuses) : "";
+      if (dead)
+        return { ok: false, timedOut: false, output: clip200(dead) };
+    }
+    return { ok: true, stdout: r.stdout };
+  }
+  const message = r.error ? r.error.message : `Command failed: ${run}
+${r.stderr ?? ""}`;
+  const out = clip200((r.stdout ?? "") + " " + message);
+  const timedOut = /ETIMEDOUT|timed out/i.test(String(r.error?.message ?? ""));
+  return {
+    ok: false,
+    timedOut,
+    output: timedOut ? `timed out after ${timeoutMs} ms ${out}`.trim() : out || "exit without output"
+  };
 };
 
 // engine/live-values.mjs
@@ -523,7 +564,7 @@ var scanFile = (content, file) => {
   return found;
 };
 var render = (raw, format, current) => {
-  const v = raw.replace(/\s+$/u, "");
+  const v = format === "int" || format === "word" ? raw.trim() : raw.replace(/\s+$/u, "");
   if (format === "int")
     return /^\d+$/.test(v) ? { value: v } : { error: `not an int: ${JSON.stringify(v.slice(0, 60))}` };
   if (format === "word") {
@@ -539,10 +580,11 @@ var render = (raw, format, current) => {
     return { error: `text value must be one non-empty line with no comment: ${JSON.stringify(v.slice(0, 60))}` };
   return { value: v };
 };
+var NUMERIC = new Set(["int", "word"]);
 var resolveFileValues = (names, entries, { root, timeoutMs }) => {
   const out = new Map;
   for (const name of names) {
-    const r = runCommand(entries[name].run, { root, timeoutMs });
+    const r = runCommand(entries[name].run, { root, timeoutMs, failOnStderr: NUMERIC.has(entries[name].format), deadStages: NUMERIC.has(entries[name].format) });
     out.set(name, r.ok ? { raw: r.stdout } : { error: `query failed: ${r.output}`, code: 3 });
   }
   return out;
@@ -608,7 +650,7 @@ var runSnapshots = ({ root, timeoutMs = 60000, now = Date.now() }) => {
   const report = { measured: [], kept: [], failed: [], missing: [] };
   for (const name of names) {
     const e = reg.entries[name];
-    const r = runCommand(e.run, { root, timeoutMs });
+    const r = runCommand(e.run, { root, timeoutMs, failOnStderr: NUMERIC.has(e.format), deadStages: NUMERIC.has(e.format) });
     if (!r.ok) {
       if (store[name]?.value) {
         report.kept.push(name);

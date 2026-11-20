@@ -255,7 +255,7 @@ def main() -> int:
         help="datasets to fetch (default: all six)",
     )
     f.set_defaults(func=cmd_fetch)
-    ap.set_defaults(func=cmd_fetch, tables=DATASET_NAMES)  # bare run == fetch all (AGENTS.md quick command)
+    ap.set_defaults(func=cmd_fetch, tables=DATASET_NAMES)  # bare run == fetch all (docs/quick-commands.md quick command)
     args = ap.parse_args()
     return args.func(args)
 

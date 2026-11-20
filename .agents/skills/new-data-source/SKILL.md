@@ -319,8 +319,8 @@ uv run pytest -m "not slow" -q     # must not include your probe
 1. **No index to update** — the skill's frontmatter `description` *is* its index
    entry. Both agents preload it. Do not add a table anywhere.
 
-2. **Add quick commands** to the Quick Commands section in `AGENTS.md`
-   (`CLAUDE.md` is a symlink to it)
+2. **Add quick commands** to `docs/quick-commands.md`
+   (not `AGENTS.md`: it is loaded every session and has a size ceiling)
 
 3. **Update `.gitignore`** if adding a new data directory outside `data/raw/` or `data/processed/`
 
@@ -356,4 +356,4 @@ Before considering a new data source complete:
 - [ ] Icelandic characters confirmed working
 - [ ] Health probe at `tests/health/test_{source}.py`, verified against the live source
 - [ ] `uv run pytest -m "not slow"` still green and still offline
-- [ ] Quick commands added to `AGENTS.md`
+- [ ] Quick commands added to `docs/quick-commands.md`

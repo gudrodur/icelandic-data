@@ -225,7 +225,7 @@ def main() -> int:
              "previous run (data/raw/hagstofan/IDN03001_housing_completions.csv)",
     )
     f.set_defaults(func=cmd_fetch)
-    ap.set_defaults(func=cmd_fetch, use_cached=False)  # bare run == fetch (AGENTS.md quick command)
+    ap.set_defaults(func=cmd_fetch, use_cached=False)  # bare run == fetch (docs/quick-commands.md quick command)
     args = ap.parse_args()
     return args.func(args)
 

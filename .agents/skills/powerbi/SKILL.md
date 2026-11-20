@@ -102,7 +102,7 @@ how every constant in the Power BI sources here was found.
    their literal formats — the only source-specific facts.
 3. Write a thin `scripts/<source>.py` CLI (copy `samgongustofa.py`'s shape:
    a `REPORTS`/dims config + `_slicer_payload` + a `fetch`/`list`).
-4. Add a health probe and a Quick Command (see `new-data-source`).
+4. Add a health probe and a Quick Command in `docs/quick-commands.md` (see `new-data-source`).
 
 ## Caveats
 

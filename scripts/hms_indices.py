@@ -250,7 +250,7 @@ def main() -> None:
     f.set_defaults(func=cmd_fetch)
     p = sub.add_parser("process", help="build the merged rent-vs-price index from raw CSVs")
     p.set_defaults(func=cmd_process)
-    # Bare run == process (AGENTS.md quick command, and the pre-existing behaviour).
+    # Bare run == process (docs/quick-commands.md quick command, and the pre-existing behaviour).
     ap.set_defaults(func=cmd_process)
     args = ap.parse_args()
     args.func(args)

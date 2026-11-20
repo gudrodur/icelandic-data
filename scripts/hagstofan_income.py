@@ -484,7 +484,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd")
     f = sub.add_parser("fetch", help="fetch wage index + income distribution + PAYE-by-background → data/processed/*.csv")
     f.set_defaults(func=cmd_fetch)
-    ap.set_defaults(func=cmd_fetch)  # bare run == fetch (AGENTS.md quick command)
+    ap.set_defaults(func=cmd_fetch)  # bare run == fetch (docs/quick-commands.md quick command)
     args = ap.parse_args()
     return args.func(args)
 

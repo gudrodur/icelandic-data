@@ -118,7 +118,7 @@ def main() -> int:
     f.set_defaults(func=cmd_fetch)
     r = sub.add_parser("report", help="report freshness of the existing UTF-8 copy")
     r.set_defaults(func=cmd_report)
-    # Bare run == fetch (AGENTS.md quick command)
+    # Bare run == fetch (docs/quick-commands.md quick command)
     ap.set_defaults(func=cmd_fetch)
     args = ap.parse_args()
     return args.func(args)

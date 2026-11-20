@@ -6,7 +6,7 @@
 
 Uses the `duckdb` Python package (a dependency of this project), so no separate
 DuckDB binary or Homebrew is needed on any platform. Paths in the query are
-resolved relative to the repository root, so the examples in AGENTS.md and the
+resolved relative to the repository root, so the examples in docs/quick-commands.md and the
 skills work from any working directory.
 """
 

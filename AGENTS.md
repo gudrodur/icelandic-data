@@ -66,7 +66,7 @@ Follow the methodology in the `new-data-source` skill — covers discovery, prob
 4. **Test** — verify output with DuckDB, check Icelandic encoding, spot-check values
 5. **Health probe** — add `tests/health/test_{source}.py` so upstream breakage surfaces on its own
 6. **Visualize** — HTML report (Chart.js/Leaflet) or static map (geopandas + cached LMI layers — Tier 1, `--group maps`)
-7. **Register** — add a Quick Command below (the skill's `description` is its own index entry)
+7. **Register** — add a Quick Command to `docs/quick-commands.md` (never to this file); the skill's `description` is its own index entry
 
 ## Requirement tiers
 
@@ -136,7 +136,7 @@ Python (managed by `uv`; Tier 0 unless noted):
 
 ## Quick Commands
 
-Per-source fetch and process commands (one block per dataset) live in [docs/quick-commands.md](docs/quick-commands.md). Read it before running or adding a source command; most skills in `.agents/skills/` also name its own commands.
+Per-source fetch and process commands (one block per dataset) live in [docs/quick-commands.md](docs/quick-commands.md). Read it before running or adding a source command; most skills in `.agents/skills/` also name their own commands.
 
 ## Tests and source health
 

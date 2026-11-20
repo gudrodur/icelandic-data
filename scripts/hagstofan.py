@@ -290,7 +290,7 @@ def main() -> int:
     l.set_defaults(func=cmd_list)
     f = sub.add_parser("fetch", help="fetch bike/e-bike imports → data/processed/bike_imports_all.csv")
     f.set_defaults(func=cmd_fetch)
-    ap.set_defaults(func=cmd_fetch)  # bare run == fetch (AGENTS.md quick command)
+    ap.set_defaults(func=cmd_fetch)  # bare run == fetch (docs/quick-commands.md quick command)
     args = ap.parse_args()
     return args.func(args)
 

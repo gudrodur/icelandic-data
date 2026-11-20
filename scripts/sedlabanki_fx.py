@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from datetime import date
 from pathlib import Path
@@ -67,11 +68,22 @@ FX_SERIES = {
 
 # "Sedlabanki" sheet row numbers in the balance-sheet workbook (stable layout)
 _CB_ROW_DATES = 9
-_CB_ROW_RESERVES = 60  # Liðir til skýringar: Gjaldeyrisforði (erlendar eignir, a-f)
+# The reserves row is found by label, not number: CBI inserts balance-sheet lines
+# above it (row 60 -> 61 in Nov 2026). Match the line itself, not the
+# "Aðrar eignir í gjaldeyrisforða" asset line that also contains the word.
+_CB_RESERVES_LABEL = "Gjaldeyrisforði/"
+
+
+def reserves_row_index(ws) -> int:
+    """1-based row of the 'Gjaldeyrisforði/ Foreign exchange reserves' memo line."""
+    for i, (label,) in enumerate(ws.iter_rows(min_col=1, max_col=1, values_only=True), 1):
+        if isinstance(label, str) and label.strip().startswith(_CB_RESERVES_LABEL):
+            return i
+    raise ValueError("CBI reserves row 'Gjaldeyrisforði/' not found in Sedlabanki sheet")
 
 
 def _client() -> httpx.Client:
-    return httpx.Client(timeout=60.0, follow_redirects=True)
+    return httpx.Client(timeout=60.0, follow_redirects=True, headers={"User-Agent": "icelandic-data/1.0"})
 
 
 def fetch_fx_market(client: httpx.Client) -> Path:
@@ -80,6 +92,10 @@ def fetch_fx_market(client: httpx.Client) -> Path:
     r = client.get(XML_BASE, params=params)
     r.raise_for_status()
     out = RAW_DIR / "fx_market_daily.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    archive = RAW_DIR / "archive" / (hashlib.sha256(r.content).hexdigest() + out.suffix)
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    archive.write_bytes(r.content)
     out.write_bytes(r.content)
     print(f"  {out.name}: {len(r.text.splitlines())} daily rows")
     return out
@@ -91,6 +107,10 @@ def fetch_eur_mid(client: httpx.Client) -> Path:
     r = client.get(XML_BASE, params=params)
     r.raise_for_status()
     out = RAW_DIR / "eur_mid_daily.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    archive = RAW_DIR / "archive" / (hashlib.sha256(r.content).hexdigest() + out.suffix)
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    archive.write_bytes(r.content)
     out.write_bytes(r.content)
     print(f"  {out.name}: {len(r.text.splitlines())} daily rows")
     return out
@@ -101,6 +121,10 @@ def fetch_cb_balance_sheet(client: httpx.Client) -> Path:
     r = client.post(PROXY, json={"url": CB_BALANCE_LIBRARY})
     r.raise_for_status()
     out = RAW_DIR / "cb_balance_sheets.xlsx"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    archive = RAW_DIR / "archive" / (hashlib.sha256(r.content).hexdigest() + out.suffix)
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    archive.write_bytes(r.content)
     out.write_bytes(r.content)
     print(f"  {out.name}: {len(r.content)} bytes")
     return out
@@ -163,18 +187,27 @@ def read_reserves(path: Path) -> pl.DataFrame:
     """Month-end FX reserves (M.kr.) from the 'Sedlabanki' sheet."""
     wb = load_workbook(path, data_only=True)
     ws = wb["Sedlabanki"]
-    dates = [c for c in next(ws.iter_rows(min_row=_CB_ROW_DATES, max_row=_CB_ROW_DATES, values_only=True)) if c is not None][1:]
-    reserve_row = next(ws.iter_rows(min_row=_CB_ROW_RESERVES, max_row=_CB_ROW_RESERVES, values_only=True))
-    vals = reserve_row[2:2 + len(dates)]
+    dates = next(ws.iter_rows(min_row=_CB_ROW_DATES, max_row=_CB_ROW_DATES, values_only=True))
+    r_idx = reserves_row_index(ws)
+    reserve_row = next(ws.iter_rows(min_row=r_idx, max_row=r_idx, values_only=True))
+    if "Gjaldeyrisforði" not in str(reserve_row[0]) or dates[0] != "M.kr.":
+        raise ValueError("CBI reserve row or unit changed")
     rows = []
-    for d, v in zip(dates, vals):
+    # Dates and values occupy the SAME workbook column; never compress blanks.
+    for d, v in zip(dates[1:], reserve_row[1:]):
+        if d is None and v is None:
+            continue
+        if not isinstance(d, date):
+            raise ValueError(f"Unexpected reserve date: {d!r}")
         if v is None:
             continue
-        if hasattr(d, "strftime"):
-            dt = d.date() if hasattr(d, "date") else d
-        else:
-            dt = date.fromisoformat(str(d)[:10])
+        if not isinstance(v, (int, float)) or v < 0:
+            raise ValueError(f"Unexpected reserve value: {v!r}")
+        dt = d.date() if hasattr(d, "date") else d
         rows.append({"date": dt, "reserves_mkr": float(v)})
+    wb.close()
+    if not rows:
+        raise ValueError("No reserve observations")
     return pl.DataFrame(rows, schema={"date": pl.Date, "reserves_mkr": pl.Float64})
 
 
@@ -197,10 +230,11 @@ def build_monthly(fx_path: Path, eur_path: Path, cb_path: Path) -> pl.DataFrame:
         )
         .rename({str(k): v for k, v in {282: "turnover_meur", 284: "turnover_mkr", 285: "sales_mkr", 287: "purchases_mkr"}.items()})
     )
-    # series that never traded in a month are absent from the pivot -> fill 0
-    for col in ("turnover_meur", "turnover_mkr", "sales_mkr", "purchases_mkr"):
-        if col not in monthly.columns:
-            monthly = monthly.with_columns(pl.lit(0.0).alias(col))
+    required = {"turnover_meur", "turnover_mkr", "sales_mkr", "purchases_mkr"}
+    if not required <= set(monthly.columns):
+        raise ValueError("Missing FX market series; missing is not zero")
+    # The official daily feed explicitly publishes zero-trading observations.
+    # Preserve missing months as null rather than manufacturing inactivity.
 
     monthly = monthly.with_columns(
         (pl.col("purchases_mkr") - pl.col("sales_mkr")).alias("net_purchases_mkr")
@@ -229,6 +263,8 @@ def build_monthly(fx_path: Path, eur_path: Path, cb_path: Path) -> pl.DataFrame:
         .select([
             "date",
             "net_purchases_mkr",
+            "purchases_mkr",
+            "sales_mkr",
             "turnover_mkr",
             "reserves_mkr",
             "isk_per_eur",
@@ -237,6 +273,69 @@ def build_monthly(fx_path: Path, eur_path: Path, cb_path: Path) -> pl.DataFrame:
     )
     return out
 
+
+# CBI publishes each month's reserves workbook as a new library item, so the
+# link is read off the page at run time. The page is Blazor Server (content
+# arrives over a websocket), so that lookup needs headless Chromium (Tier 2).
+LIQUIDITY_PAGE = "https://cb.is/statistics/international-reserves/"
+
+
+def resolve_liquidity_url() -> str:
+    """Current 'International Reserves <Month YYYY>' library link on LIQUIDITY_PAGE."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as e:  # pragma: no cover
+        raise SystemExit("liquidity needs Playwright + Chromium: uv run playwright install chromium") from e
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(LIQUIDITY_PAGE, wait_until="networkidle", timeout=90_000)
+        links = page.eval_on_selector_all(
+            "a[href*='library/?itemid=']", "els => els.map(a => [a.innerText, a.href])"
+        )
+        browser.close()
+    hits = sorted({href for text, href in links if "reserves" in text.lower()})
+    if len(hits) != 1:
+        raise ValueError(f"Expected one reserves workbook link on {LIQUIDITY_PAGE}, found {links}")
+    return hits[0]
+
+
+def read_liquidity(path: Path) -> pl.DataFrame:
+    """SDDS reserve assets and predetermined net drains; preserve source signs."""
+    wb = load_workbook(path, read_only=True, data_only=True)
+    assets, drains = wb["I"], wb["II"]
+    if assets.cell(5,1).value != 'M.kr.' or drains.cell(5,1).value != 'M.kr.':
+        raise ValueError('Reserve liquidity units changed')
+    checks = [(assets,2,'Official reserve assets'),(drains,2,'Foreign currency loans'),(drains,22,'Aggregate short and long'),(drains,31,'Other')]
+    for sheet,col,label in checks:
+        if not str(sheet.cell(7,col).value).startswith(label):
+            raise ValueError('Reserve liquidity columns changed')
+    a = {r[0].date():r[1] for r in assets.iter_rows(min_row=8,values_only=True) if isinstance(r[0],date)}
+    rows = []
+    for r in drains.iter_rows(min_row=8,values_only=True):
+        if not isinstance(r[0],date): continue
+        dt=r[0].date();parts=[r[1],r[21],r[30]]
+        if dt not in a or a[dt] is None or any(v is None for v in parts): continue
+        # II.1 loans/securities/deposits + II.2 forwards/futures + II.3 other.
+        # In source conventions, an outflow is negative. Export drains positive.
+        rows.append({'date':dt,'reserve_assets_mkr':float(a[dt]),'net_drains_12m_mkr':-sum(parts)})
+    wb.close()
+    if not rows: raise ValueError('No reserve liquidity observations')
+    return pl.DataFrame(rows).sort('date')
+
+def cmd_liquidity():
+    RAW_DIR.mkdir(parents=True,exist_ok=True);PROCESSED_DIR.mkdir(parents=True,exist_ok=True)
+    with _client() as client:
+        url=resolve_liquidity_url();print(f'Reserve liquidity workbook: {url}')
+        r=client.get(url);r.raise_for_status()
+    path=RAW_DIR/'reserve_liquidity.xlsx';path.write_bytes(r.content)
+    archive=RAW_DIR/'archive'/(hashlib.sha256(r.content).hexdigest()+'.xlsx')
+    archive.parent.mkdir(parents=True,exist_ok=True);archive.write_bytes(r.content)
+    df=read_liquidity(path)
+    if (date.today()-df['date'].max()).days>75:
+        raise ValueError(f'Reserve liquidity workbook stale: newest observation {df["date"].max()} from {url}')
+    out=PROCESSED_DIR/'sedlabanki_reserve_liquidity.csv';df.write_csv(out)
+    print(f'Wrote {len(df)} reserve liquidity rows to {out}')
 
 def cmd_list() -> None:
     with _client() as client:
@@ -275,8 +374,11 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="list the daily FX series found upstream")
     sub.add_parser("fetch", help="fetch raw + write data/processed/sedlabanki_fx_intervention.csv")
+    sub.add_parser("liquidity", help="fetch monthly reserve assets and scheduled 12-month net FX drains")
     args = parser.parse_args()
-    if args.cmd == "list":
+    if args.cmd == "liquidity":
+        cmd_liquidity()
+    elif args.cmd == "list":
         cmd_list()
     else:
         cmd_fetch()

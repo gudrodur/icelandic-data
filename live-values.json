@@ -1,7 +1,1 @@
-{
-  "skill-count": {
-    "run": "git ls-files '*SKILL.md' | wc -l",
-    "kind": "file",
-    "format": "int"
-  }
-}
+{}

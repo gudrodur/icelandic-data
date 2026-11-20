@@ -6,12 +6,10 @@ download the live ZIP and assert shape across all 17 SDG goals.
 from __future__ import annotations
 
 import csv
-from pathlib import Path
 
 import pytest
 
 from scripts import heimsmarkmid as hm
-
 
 # --------------------------------------------------------------------------
 # Fast unit tests

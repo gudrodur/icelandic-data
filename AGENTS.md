@@ -37,9 +37,15 @@ a table in this file would be a second, staler copy that cannot trigger anything
 Run `ls .agents/skills/` to enumerate them.
 
 Keep each `description` under ~160 characters: Codex truncates when all descriptions
-combined exceed 8,000 characters, and with <!-- live:skill-count -->58<!-- /live --> skills that budget is the binding constraint.
+combined exceed 8,000 characters, and with 45 skills that budget is the binding constraint.
 
 **When asked about a new data source:** follow the `new-data-source` skill.
+
+## Write-ups live elsewhere
+
+This repo fetches and queries. Memos, plans and kept reports for Sósíalistaflokkur Íslands
+go to `~/Code/xj-accounts/research/` (copy any `reports/*.html` worth keeping there with a
+date prefix — `reports/` here is git-ignored).
 
 ## HTML Reports
 
@@ -59,23 +65,73 @@ Follow the methodology in the `new-data-source` skill — covers discovery, prob
 3. **Script** — create `scripts/{source}.py` with `list`/`fetch` subcommands (polars + httpx)
 4. **Test** — verify output with DuckDB, check Icelandic encoding, spot-check values
 5. **Health probe** — add `tests/health/test_{source}.py` so upstream breakage surfaces on its own
-6. **Visualize** — HTML report (Chart.js/Leaflet) or static map (geopandas + cached LMI layers)
+6. **Visualize** — HTML report (Chart.js/Leaflet) or static map (geopandas + cached LMI layers — Tier 1, `--group maps`)
 7. **Register** — add a Quick Command below (the skill's `description` is its own index entry)
+
+## Requirement tiers
+
+Every skill belongs to exactly one tier, declared in a `**Requires:**` line
+directly under its title. Tier 0 must stay installable with a single `uv sync`
+on macOS, Linux and Windows — that is the contract that lets a newcomer with
+Claude Desktop or ChatGPT Desktop use the toolkit. Anything heavier is opt-in.
+
+| Tier | Name | Install | What it gates | Rule |
+|---|---|---|---|---|
+| 0 | core | `uv sync` | polars, httpx, duckdb, openpyxl, iceaddr, playwright (package only) | Pure-Python wheels, no system libraries, no browser download. ~40 skills. |
+| 1 | maps | `uv sync --group maps` | geopandas, rasterio, pyproj, shapely, matplotlib, numpy | Wheels exist on all platforms but are large. Map scripts import these lazily or live in map-only scripts. |
+| 2 | browser | `uv run playwright install chromium` | Chromium for Playwright | Power BI, Tableau, JS-rendered pages. The Python package is Tier 0; only the ~150 MB browser is opt-in. |
+| 3 | pdf | `uv sync --group pdf` | docling, liteparse | Torch-sized. `pdfplumber` (Tier 0) covers native-text PDFs; this tier is for scanned/complex tables. |
+| 4 | restricted | none | Icelandic IP (samgongustofa), Sprite/R2 credentials (annual-report-cache), mac-mini ops | Documented so an agent can explain why, never silently required. |
+
+Rules when adding or changing a skill:
+
+- Put `**Requires:** Tier N (name) — one-line reason` as the first body line. Tier 0
+  skills say `**Requires:** Tier 0 (core).` so the absence is never ambiguous.
+- A Tier 0 script must not import a Tier 1/3 package at module top; import it
+  inside the function that needs it, with a clear error naming the group.
+- A skill that is mostly Tier 0 with one heavier command (e.g. `hms` + landeignaskrá
+  build) stays Tier 0 and names the exception in its `Requires` line.
+- Never add a dependency to the core list in `pyproject.toml` that needs a compiler,
+  a system library, or a browser. Put it in a group and, if new, add a tier row here.
+- `scripts/setup_check.py` reports which tiers are present; keep its module lists in
+  step with this table. CI runs the fast suite core-only and with `maps` on all three
+  OSes.
 
 ## Tools
 
-Installed via `./setup.sh`:
-- `jq` - JSON processing
-- `duckdb` - SQL on local files
-- `uv` - Python package manager
+Everything runs on macOS, Linux and Windows. The only prerequisite is `uv`
+(https://docs.astral.sh/uv/) — it downloads Python and every dependency itself.
+`./setup.sh` (macOS/Linux) or `.\setup.ps1` (Windows) installs `uv` if missing,
+runs `uv sync`, and then `scripts/setup_check.py`, which verifies imports and
+repairs the `.claude/skills` link (git on Windows and GitHub ZIP downloads turn
+symlinks into plain files; the checker recreates a symlink or a junction). After a
+junction repair on Windows, `git status` shows `.claude/skills` as a typechange
+permanently — expected; do not `git checkout -- .claude/skills`, that brings the
+text file back.
 
-Python (managed by `uv`):
+No Homebrew, no system Python, no DuckDB binary. SQL on local files goes through
+`scripts/sql.py`, which wraps the `duckdb` Python package:
+
+```bash
+uv run python scripts/sql.py "SELECT * FROM 'data/processed/fuel_prices_daily.csv' LIMIT 5"
+uv run python scripts/sql.py --csv "SELECT ..." > out.csv
+```
+
+`jq` is optional; `uv run python -m json.tool` pretty-prints JSON on every platform.
+
+Windows: use `uv run python scripts/...` exactly as documented (works in
+PowerShell). `setup.ps1` sets `PYTHONUTF8=1` so Icelandic characters print
+correctly. Always pass `encoding="utf-8"` to `open()` / `read_text()` /
+`write_text()` in scripts — Windows defaults to cp1252 otherwise.
+
+Python (managed by `uv`; Tier 0 unless noted):
+- `duckdb` - SQL on CSV/Parquet/JSON (via `scripts/sql.py`)
 - `polars` - Fast DataFrame library
 - `openpyxl` - Excel file reading
 - `httpx` - HTTP client
-- `playwright` - Headless browser automation (for skatturinn.is)
+- `playwright` - Headless browser automation (Tier 2 once Chromium is installed)
 - `pdfplumber` - PDF text/table extraction
-- `docling` - AI-powered PDF extraction with 97.9% table accuracy (IBM)
+- `docling` - AI-powered PDF extraction with 97.9% table accuracy (IBM) — Tier 3, `--group pdf`
 - `iceaddr` - Icelandic address geocoding (bundled SQLite from Staðfangaskrá)
 
 ## Quick Commands
@@ -92,7 +148,7 @@ uv run python scripts/sedlabanki_fx.py list
 uv run python scripts/gengi.py USD,EUR --history 6m
 
 # Query processed data
-duckdb -c "SELECT * FROM 'data/processed/*.csv' LIMIT 10"
+uv run python scripts/sql.py "SELECT * FROM 'data/processed/fuel_prices_daily.csv' LIMIT 10"
 
 # Get company info and annual reports list
 uv run python scripts/skatturinn.py info <kennitala>
@@ -112,11 +168,8 @@ uv run python scripts/eurostat.py fetch prc_hicp_midx --filter geo=EA20 --filter
 uv run python scripts/eurostat.py fetch namq_10_a10 --filter geo=EA20 --filter na_item=D1 --filter s_adj=SCA --filter unit=CP_MEUR --filter nace_r2=TOTAL
 uv run python scripts/eurostat.py fetch namq_10_pe --filter geo=EA20 --filter na_item=EMP_DC --filter s_adj=SCA --filter unit=THS_PER
 
-# Real wage comparison Iceland vs euro area (Chart.js HTML report)
-uv run python reports/real_wages_is_vs_euro.py
-
 # Property price analysis
-duckdb -c "SELECT YEAR(kaupsamningur_dags), median(kaupverd*1000/einflm_m2) FROM 'data/processed/kaupskra_geocoded.parquet' WHERE NOT onothaefur AND tegund='Fjölbýli' GROUP BY 1 ORDER BY 1"
+uv run python scripts/sql.py "SELECT YEAR(kaupsamningur_dags), median(kaupverd*1000/einflm_m2) FROM 'data/processed/kaupskra_geocoded.parquet' WHERE NOT onothaefur AND tegund='Fjölbýli' GROUP BY 1 ORDER BY 1"
 
 # Geocode an Icelandic address
 uv run python -c "from iceaddr import iceaddr_lookup; print(iceaddr_lookup('Laugavegur', number=22, postcode=101))"
@@ -161,6 +214,11 @@ uv run python scripts/eea_sdi.py record   35a036bb-c027-401c-8625-2ecf722e8461
 uv run python scripts/eea_sdi.py links    35a036bb-c027-401c-8625-2ecf722e8461
 uv run python scripts/eea_sdi.py xml      35a036bb-c027-401c-8625-2ecf722e8461 -o data/raw/eea_sdi/grassland_2015.xml
 
+# Hagstofan: any PX table — browse with breadcrumbs (last_updated, note counts, next command), read notes, fetch
+uv run python scripts/hagstofan_query.py list Ibuar/buferlaflutningar/buferlaflmillilanda
+uv run python scripts/hagstofan_query.py notes Ibuar/buferlaflutningar/buferlaflmillilanda/MAN01400.px
+uv run python scripts/hagstofan_query.py fetch Ibuar/buferlaflutningar/buferlaflmillilanda/MAN01400.px --filters '{"Kyn":["0"]}' --since 2015 --out out.json
+
 # Hagstofan: CPI sub-components (headline + 12 COICOP groups + imported/domestic/services)
 # Chain-links VIS01304/01102 archive onto VIS01300/01101 current across the June 2024 break
 uv run python scripts/hagstofan_cpi.py
@@ -182,8 +240,22 @@ uv run python scripts/income_distribution.py
 uv run python scripts/laun.py 1000000
 
 # HMS: house-price (kaupvísitala) vs rental-price (leiguvísitala) indices, rebased to 2023-05=100
-# Requires data/raw/hms/indices/{kaup,leigu}visitala.csv — manual downloads from hms.is
-uv run python scripts/hms_indices.py
+# The visitala page is Vercel-guarded, but the CSVs fetch straight from object storage.
+uv run python scripts/hms_indices.py fetch     # -> data/raw/hms/indices/{kaup,leigu}visitala.csv
+uv run python scripts/hms_indices.py           # -> data/processed/hms_rent_vs_price_index.csv
+
+# HMS kaupskrá: fetch the 48 MB property-transaction CSV, convert Latin-1 -> UTF-8, report freshness
+uv run python scripts/kaupskra_fetch.py        # -> data/raw/hms/kaupskra_utf8.csv
+uv run python scripts/kaupskra_fetch.py report
+
+# HMS mánaðarskýrsla: newest monthly report's workbook + page text (headless Chromium for discovery)
+uv run python scripts/hms_manadarskyrsla.py           # -> data/processed/hms_manadarskyrsla/{YYYY-MM}/{sheet}.csv
+uv run python scripts/hms_manadarskyrsla.py list
+
+# HMS húsnæðisáætlanir (annual housing plans): completions vs need, waitlists, plots
+uv run python scripts/hms_housing_plans.py            # parse the newest local workbook
+uv run python scripts/hms_housing_plans.py --year 2026
+uv run python scripts/hms_housing_plans.py list
 
 # Housing completions 1970–2025 — Hagstofan IDN03001 + HMS húsnæðisáætlanir -> data/processed/iceland_housing_completions.csv
 uv run python scripts/housing_completions.py
@@ -195,19 +267,6 @@ uv run python scripts/lmi.py download
 uv run python scripts/kortagerð.py static -o reports/iceland-map.png
 uv run python scripts/kortagerð.py html -o reports/iceland-map.html
 uv run python scripts/kortagerð.py static --bounds capital --highlight "Reykjavíkurborg" -o reports/rvk.png
-
-# Náttúrufræðistofnun: habitat-type mask from the 5 m vistgerðir raster via WCS
-# (1:25.000 3rd ed.; DN=95 = L14.2 Tún og akurlendi, 1,806 km²)
-# RETIRED 2026-11: both the LMI_vektor:vistgerd polygons (2026-08) and the 5 m raster were
-# withdrawn upstream, no successor; natt.py now exits with an explanation. Cached masks still render.
-# Fetch cost is server-bound and scales with output pixels — see --res below.
-uv run python scripts/natt.py habitat --dn 95            # 50 m ISN93 mask, ~2 min
-uv run python scripts/natt.py habitat --dn 95 --res 100  # ~1 min, still map-grade
-uv run python scripts/natt.py habitat --dn 95 --res 20   # ~30 min, detail work
-uv run python scripts/natt.py inventory          # DN→htxt codes, from the WMS legend
-
-# Map of Iceland's agricultural land (PNG + single-file Leaflet HTML)
-uv run python scripts/agricultural_land_map.py
 
 # Iceland grassland map (Copernicus HRL via LMI, 20 m raster) — uses Tier 3 cache
 uv run python scripts/lmi_hrl.py fetch grassland       # one-time, ~860 MB
@@ -235,14 +294,14 @@ uv run python scripts/vernd.py fetch
 uv run python scripts/byggdastofnun.py list
 uv run python scripts/byggdastofnun.py url tekjur
 
-# Tekjusagan — income history (token + Playwright drive)
-uv run python scripts/tekjusagan.py token
-uv run python scripts/tekjusagan.py fetch
+# Tekjusagan — income history 1991–2024 (open JSON API; disposable income, assets/debt, gender×education)
+uv run python scripts/tekjusagan.py list
+uv run python scripts/tekjusagan.py fetch                       # -> data/processed/tekjusagan_{series}.csv
+uv run python scripts/tekjusagan.py fetch --series radstofun --set "Tekjubil=Tekjubil 1"
 
-# Skoðanakannanir — RÚV + Vísir + Heimildin opinion-poll aggregators (national + Reykjavík, all pollsters)
+# Skoðanakannanir — RÚV + Vísir opinion-poll aggregators (national + Reykjavík, all pollsters)
 uv run python scripts/skodanakannanir.py list
 uv run python scripts/skodanakannanir.py list --source visir --since 2025 --scope reykjavik
-uv run python scripts/skodanakannanir.py list --source heimildin --since 2020
 uv run python scripts/skodanakannanir.py list --source all --since 2025
 uv run python scripts/skodanakannanir.py fetch 479261
 uv run python scripts/skodanakannanir.py fetch visir-20262904348    # Vísir works too, no browser needed
@@ -278,6 +337,11 @@ uv run python scripts/opnirreikningar.py top-vendors --org 14412 --year 2024
 uv run python scripts/tenders.py download-ocds
 uv run python scripts/tenders.py search --cpv 90600000 --date-from 20240101
 uv run python scripts/tenders.py awards --buyer "Reykjavíkurborg"
+
+# Reykjavík útboðsvefur (In-Tend) — all tender notices since 2017 -> data/processed/utbod_reykjavik_projects.csv
+uv run python scripts/utbod_reykjavik.py fetch
+uv run python scripts/utbod_reykjavik.py list
+uv run python scripts/utbod_reykjavik.py search 'ræsting'
 
 # Reykjavík winter/street tender results 2018–2024 (reykjavik.is scrape) -> data/processed/reykjavik_winter_tenders.csv
 uv run python scripts/reykjavik_tenders.py
@@ -362,22 +426,8 @@ uv run pytest tests/test_cache_consistency.py tests/test_maps_render.py -v
 
 ## Tests and source health
 
-> **Fork note (`gudrodur/icelandic-data`).** Everything below describes upstream's setup and
-> is accurate for `jokull/icelandic-data`. Two things differ here, and both are easy to
-> misread because the workflow file is byte-identical to upstream on purpose:
->
-> - **The runner is not the mac-mini.** Probes run on `fedora-icelandic-data`, a self-hosted
->   runner on Guðröður's Fedora box, registered to this repo with labels
->   `self-hosted, iceland, fedora`. The `iceland` label was chosen deliberately so
->   `runs-on: [self-hosted, iceland]` needs no fork-side edit. Consequence: the daily run
->   depends on that machine being awake at 06:17 UTC. If it is off, the run does not happen,
->   which the history records as *not observed*, never as *down*.
-> - **There is no dead-man's-switch on this fork.** The mechanism described under "The blind
->   spot" runs on the mini and watches upstream's `health-history`. Nothing watches ours. So
->   for this repo that section documents a safety net we do not have.
-
-
 ```bash
+uv run ruff check . --fix              # lint — every selected rule is a CI error; no warnings
 uv run pytest -m "not slow"            # fast, offline — what PR CI runs
 uv run pytest -m slow                  # network + Playwright integration tests
 
@@ -444,7 +494,7 @@ observed*, not *down* — and uptime is `healthy/observed`, never `healthy/elaps
 ```bash
 # Uptime per source, straight off the JSONL — no ingest step
 git fetch origin health-history && git show origin/health-history:history.jsonl > /tmp/h.jsonl
-duckdb -c "
+uv run python scripts/sql.py "
 SELECT source,
        round(100.0 * count(*) FILTER (WHERE status='healthy') / count(*), 1) AS uptime_pct,
        count(*) AS observations,
@@ -531,20 +581,5 @@ is where the turtles stop.
 - `scripts/health_summary.py` — renders health results from pytest JUnit XML (not a fetcher)
 - `tests/health/test_{source}.py` — upstream health probes, auto-marked `slow` + `health`
 - `reports/*.py` — one-off report scripts (gitignored, local-only, sit next to the `.html` they emit)
-
-> **Fork-only exception.** Three files under `reports/` ARE tracked here:
-> `build_esb_report.py`, `esb_kannanir_2026.json` and `esb-kannanir-2026-artifact.html`.
-> They are not a one-off. The builder holds numbers read by hand out of article prose plus
-> the editorial calls that go with them, so rerunning anything cannot regenerate it, and it
-> is the source of truth for a page that is published, shared publicly and updated
-> repeatedly. Untracked it lived in exactly one place on one disk. Everything else under
-> `reports/` follows upstream's rule unchanged.
->
-> `data/processed/skodanakannanir.csv` is tracked for the same reason. It looks derived, and
-> mostly is, but three rows are `source=manual`: the Gallup/Áfram Ísland poll (`ruv-483052`)
-> is not reachable by `list`, because RÚV never tagged that article a poll. Rerunning the
-> pipeline on a fresh checkout therefore produces a *smaller* file, silently, and this is the
-> path the Quick Commands above tell you to query with duckdb. Nothing else under
-> `data/processed/` is tracked.
 
 Inflation-specific analysis (derivation scripts, research reports, the whodunit blog post) lives in [`~/Code/inflation-whodunit`](../inflation-whodunit). That repo reads processed data from here.

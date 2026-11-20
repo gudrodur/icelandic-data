@@ -12,11 +12,10 @@ Usage:
     uv run python scripts/nasdaq.py download <disclosure_id>     # Download attachments
 """
 
-import httpx
 import json
-import sys
 from pathlib import Path
-from urllib.parse import quote
+
+import httpx
 
 BASE_URL = "https://api.news.eu.nasdaq.com/news"
 DATA_DIR = Path(__file__).parent.parent / "data" / "raw" / "nasdaq"

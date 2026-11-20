@@ -1,9 +1,21 @@
 # Icelandic Data
 
+<img src="assets/icelandic-data.png" alt="Icelandic Data" width="640">
+
 [![data sources](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjokull%2Ficelandic-data%2Fhealth-history%2Fbadge.json)](https://github.com/jokull/icelandic-data/actions/workflows/source-health.yml)
 [![CI](https://github.com/jokull/icelandic-data/actions/workflows/ci.yml/badge.svg)](https://github.com/jokull/icelandic-data/actions/workflows/ci.yml)
 
-Data toolkit for Icelandic public data, built around [Claude Code](https://claude.com/claude-code) and [Codex](https://developers.openai.com/codex). The `.agents/skills/` files document each data source — API endpoints, series codes, encoding quirks, classification changes — and the `scripts/` directory has Python scripts that fetch, clean, and transform the data.
+Data toolkit for Icelandic public data. The `.agents/skills/` files document each data source — API endpoints, series codes, encoding quirks, classification changes — and the `scripts/` directory has Python scripts that fetch, clean, and transform the data. It's harness-agnostic: any agent that can read the skills and run the scripts they reference (Claude Code, Codex, and others) works.
+
+<blockquote>
+  <p>“I spent a good chunk of my career, including an entire startup, DataMarket, making public data accessible. This project cracks the problem from the angle I now believe is the right one: <strong>don't build another portal, make the data agent-ready.</strong> Ask a question in plain language and watch it pull together answers from dozens of official sources. I've been showing it to people in government as a direct demonstration of what such an approach can deliver.”</p>
+  <p>
+    <a href="https://hjalli.com/about/"><img src="assets/hjalmar-gislason.jpg" alt="Hjálmar Gíslason" width="64" height="64" align="left"></a>
+    &nbsp; <strong><a href="https://hjalli.com/about/">Hjálmar Gíslason</a></strong><br>
+    &nbsp; Founder &amp; CEO of GRID<br>
+    &nbsp; Previously founder of DataMarket (acquired by Qlik)
+  </p>
+</blockquote>
 
 The **data sources** badge reports upstream health, not this repo's code: a source only turns it
 red after **7 straight days** down or returning the wrong shape. Anything shorter is weather —
@@ -11,7 +23,7 @@ these are public APIs and they blink. Details in
 [`AGENTS.md`](AGENTS.md#flake-vs-dead); raw history is on the
 [`health-history`](https://github.com/jokull/icelandic-data/tree/health-history) branch.
 
-Not a portable skill library. The skills reference co-located scripts, assume local tooling (`uv`, `duckdb`, `playwright`), and work as a unit. Clone the repo, run setup, and use an agent to research questions, join data sources, or produce outputs — a gist, a CSV, an HTML report, whatever fits.
+Not a portable skill library. The skills reference co-located scripts and work as a unit. Get the repo, run setup, and use an agent to research questions, join data sources, or produce outputs — a gist, a CSV, an HTML report, whatever fits. It is plain Python and runs on macOS, Linux and Windows.
 
 ## Structure
 
@@ -29,7 +41,7 @@ Code, and `CLAUDE.md` symlinks to `AGENTS.md`. One set of files, both agents.
 
 ## Data sources
 
-Currently <!-- live:skill-count -->58<!-- /live --> skills covering national statistics, government dashboards
+Currently 56 skills covering national statistics, government dashboards
 (_mælaborð_), regulatory filings, and utility APIs. Each skill's frontmatter
 `description` is its index entry — run `ls .agents/skills/` to enumerate them, and see
 [`AGENTS.md`](AGENTS.md) for the quick-commands reference.
@@ -52,7 +64,7 @@ Per-source uptime and last error are in the
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/sedlabanki.svg" width="12"> | Seðlabanki | SDMX API — monetary policy, financial stability, FX history via ECB |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/sedlabanki_fx.svg" width="12"> | Seðlabanki (FX) | Central Bank FX intervention — gjaldeyriskaup/-sala, turnover, reserves, ISK/EUR (monthly) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/lanamal.svg" width="12"> | Lánamál ríkisins | Government bond yields — RIKB/RIKS daily fixings, no auth (lanamal.is) |
-| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/tekjusagan.svg" width="12"> | Tekjusagan | Income-history dashboard — 5 Power BI report routes (Forsætisráðuneytið) |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/tekjusagan.svg" width="12"> | Tekjusagan | Income history 1991–2024 — open JSON API behind the dashboard (Forsætisráðuneytið) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/velsaeldarvisar.svg" width="12"> | Velsældarvísar | Hagstofa indicator catalogs — well-being + social + cultural (88 indicators → 77 PX tables) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/heimsmarkmid.svg" width="12"> | Heimsmarkmið | UN SDG national statistics — 137 indicators across all 17 goals (open-sdg ZIP bundle) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/rikisreikningur.svg" width="12"> | Ríkisreikningur | State accounts — yearly afkoma 2015+, málefnasvið breakdowns, 35 published files (Azure Functions API) |
@@ -91,6 +103,7 @@ Systematic coverage of public dashboards published under Iceland's data-access l
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/skodanakannanir.svg" width="12"> | Skoðanakannanir | RÚV opinion-poll aggregator — national + Reykjavík party support across pollsters |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/opnirreikningar.svg" width="12"> | Opnir reikningar | Government invoices by org/vendor/type, 2017–present |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/tenders.svg" width="12"> | Tenders | 3,494+ public tenders via TED API + OCDS bulk data |
+| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/utbod_reykjavik.svg" width="12"> | Útboð Reykjavíkur | Every Reykjavík tender notice since 2017 via the In-Tend portal (utbod.reykjavik.is) |
 
 ### Property, planning, addresses
 
@@ -116,7 +129,6 @@ Systematic coverage of public dashboards published under Iceland's data-access l
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/co2.svg" width="12"> | CO2 (co2.is) | Climate action plan — 106 numbered actions across 4 kerfi, status + ministry + year tracking |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/lmi.svg" width="12"> | LMI | Vector geodata via GeoServer WFS — coastline, roads, rivers, glaciers |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/lmi_hrl.svg" width="12"> | LMI HRL | Copernicus High Resolution Layers via LMI — grassland, imperviousness (20 m raster) |
-| <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/natt.svg" width="12"> | Náttúrufræðistofnun | Habitat-type polygons (vistgerðir) via WFS |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/eea_sdi.svg" width="12"> | EEA SDI | European Environment Agency geospatial catalogue (GeoNetwork 4.4) |
 | <img src="https://raw.githubusercontent.com/jokull/icelandic-data/health-history/dots/ust_gis.svg" width="12"> | UST GIS | Environment Agency WFS — contaminated land, water, protected areas, noise and wastewater |
 | · | Kortagerð | Iceland map generation — matplotlib (static) + Leaflet (interactive) |
@@ -144,11 +156,66 @@ Systematic coverage of public dashboards published under Iceland's data-access l
 
 ## Setup
 
-```bash
-./setup.sh          # Install CLI tools (jq, duckdb, uv, etc.)
-uv sync             # Install Python dependencies
-uv run playwright install chromium   # Only if you plan to use Power BI / SPA scrapers
-```
+You need a terminal once, for setup. After that, an agent does the typing.
+
+1. **Get the repo.** `git clone https://github.com/jokull/icelandic-data` — or, without
+   git, use **Code → Download ZIP** on GitHub and unzip it. (The Code tab in Claude
+   Desktop needs [Git for Windows](https://git-scm.com/download/win) installed on
+   Windows even for a ZIP checkout; Claude Code CLI and Codex do not.)
+2. **Run setup.** It installs [`uv`](https://docs.astral.sh/uv/) if you don't have it,
+   which then downloads Python and every dependency. Nothing else is required — no
+   Homebrew, no system Python.
+
+   ```bash
+   ./setup.sh                                          # macOS / Linux
+   powershell -ExecutionPolicy Bypass -File .\setup.ps1  # Windows
+   ```
+
+   Setup ends by running `scripts/setup_check.py`, which reports what works and
+   repairs the `.claude/skills` link if git or the ZIP download flattened it.
+   (On Windows that repair is a junction, and `git status` will show `.claude/skills`
+   as changed from then on — expected, do not revert it.)
+3. **Open the folder in your agent.** Claude Code, Codex, the Code tab in Claude
+   Desktop, or ChatGPT Desktop (Codex) all read the skills from the repo. Ask a question
+   such as *"What is the median price per m² of apartments in Reykjavík since 2020?"*
+   Codex asks whether to trust the folder the first time — say yes. That loads
+   `.codex/config.toml`, which lets the sandbox reach the Icelandic APIs; without it
+   every fetch fails with a DNS error.
+
+That is **Tier 0** and covers 41 of the 56 skills. The rest need one more
+opt-in install; each skill says which at the top of its `SKILL.md`:
+
+| Tier | Install | Unlocks |
+|---|---|---|
+| 0 core | `uv sync` | statistics, dashboards, registers, finance, polls, weather — plain Python |
+| 1 maps | `uv sync --group maps` | map rendering and rasters (kortagerð, LMI, NÍ habitats, traffic/cattle maps) |
+| 2 browser | `uv run playwright install chromium` | Power BI / Tableau / JS-rendered scrapers |
+| 3 pdf | `uv sync --group pdf` | Docling AI table extraction (pulls in torch, ~2 GB) |
+| 4 restricted | — | needs an Icelandic IP or private credentials; documented, not portable |
+
+`scripts/setup_check.py` prints which tiers are installed.
+
+### What a first run looks like
+
+Measured on a fresh macOS user account and a bare Ubuntu container, both with only
+`curl` on PATH: `setup.sh` finishes in 20–30 s, the environment is about 500 MB, and
+the maps tier adds a couple of seconds. Where newcomers can stall, and the fix:
+
+| Stops at | Why | Fix |
+|---|---|---|
+| Claude Desktop Code tab on Windows | needs Git for Windows | install Git, restart the app |
+| PowerShell refuses `setup.ps1` | execution policy | run it as shown above, with `-ExecutionPolicy Bypass` |
+| `uv: command not found` right after install | new PATH not in the current shell | open a new terminal, or re-run `setup.sh` |
+| Codex: every fetch fails with a DNS error | sandbox has no network until the folder is trusted | trust the folder when asked |
+| Power BI / Tableau skill fails to start a browser | Tier 2 not installed | `uv run playwright install chromium` |
+| A map script exits asking for the maps tier | Tier 1 not installed | `uv sync --group maps` |
+| Samgöngustofa times out | geo-fenced to Icelandic IPs | run from Iceland or skip |
+ On Windows `setup.ps1`
+sets `PYTHONUTF8=1` for your user account so Icelandic characters print correctly.
+
+Every command in the docs is of the form `uv run python scripts/<name>.py ...` and
+works the same in bash, zsh, fish and PowerShell. SQL against the processed files
+goes through `uv run python scripts/sql.py "SELECT ..."`, so no DuckDB binary is needed.
 
 ## Usage
 
@@ -158,7 +225,7 @@ uv run python scripts/sedlabanki.py
 uv run python scripts/fuel.py
 
 # Query with DuckDB
-duckdb -c "SELECT * FROM 'data/processed/*.csv' LIMIT 10"
+uv run python scripts/sql.py "SELECT * FROM 'data/processed/fuel_prices_daily.csv' LIMIT 10"
 
 # Company financials pipeline
 uv run python scripts/financials.py company <kennitala> --year 2024

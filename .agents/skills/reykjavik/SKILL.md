@@ -5,6 +5,8 @@ description: Reykjavík municipality CKAN + PX-Web — services, demographics, w
 
 # Reykjavíkurborg (Reykjavík Municipality)
 
+**Requires:** Tier 0 (core).
+
 Open data from Reykjavík City via two APIs:
 1. **CKAN API** at gagnagatt.reykjavik.is - downloadable CSV files
 2. **PX-Web API** at velstat.reykjavik.is - welfare statistics (requires POST queries)
@@ -79,23 +81,19 @@ curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_search?fq=organizat
 curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_search?fq=groups:ibuar&rows=10" | jq
 ```
 
-**⚠️ Search gotcha:** CKAN's `package_search` does **not** handle Icelandic stems or characters well — a search for `bílastæ` or `bilasta` returns 0 hits even though `lykiltolur_bilastaedasjods` exists. Always fall back to `package_list` + local grep when looking for a topic:
-```bash
-# Discover datasets the reliable way
-curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_list" \
-  | jq -r '.result[]' \
-  | grep -iE 'bilasta|uppgjor|reikning'
-```
-
 ### Get dataset details
+Package ids are short slugs, not the title (`arsuppgjor` is "Ársuppgjör A-hluta
+Reykjavíkurborgar"; the long form 404s). `package_show` also returns
+`metadata_modified`, `notes` (incl. the vendor-redaction caveat), `license_title`
+and per-resource `last_modified` — read them before charting.
 ```bash
-curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_show?id=arsuppgjor-a-hluta-reykjavikurborgar" | jq
+curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_show?id=arsuppgjor" | jq
 ```
 
 ### Download CSV resource
 ```bash
 # Get resource URL from package_show, then download
-curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_show?id=arsuppgjor-a-hluta-reykjavikurborgar" | \
+curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_show?id=arsuppgjor" | \
   jq -r '.result.resources[0].url' | \
   xargs curl -o data/raw/reykjavik/arsuppgjor.csv
 ```
@@ -132,16 +130,11 @@ curl -s "https://gagnagatt.reykjavik.is/api/3/action/package_show?id=arsuppgjor-
 
 ### Financial — Opin Fjármál (Annual Accounts with Vendor Detail)
 
-**Use this for:** "What does Reykjavík spend on X?", "Who are Reykjavík's biggest vendors?", "How much does Reykjavík pay Strætó/SORPA/etc?", **or any post-2017 fund-level P&L question** (e.g., Bílastæðasjóður surplus by year — must be reconstructed from transactions since the fund lost separate-fund status).
+**Use this for:** "What does Reykjavík spend on X?", "Who are Reykjavík's biggest vendors?", "How much does Reykjavík pay Strætó/SORPA/etc?"
 
 **Dataset:** `arsuppgjor` on gagnagatt — CSV files per year, semicolon-delimited, 2014–2025.
 
-**Coverage:** A-part only (tax-funded). B-part entities (OR, Strætó, Félagsbústaðir, SORPA, etc.) are **not** included as buyers — but they appear as vendors when the A-part pays them.
-
-**Fund structure changed over time (`fyrirtaeki` column):**
-- 2014–2016: Three funds — `Reykjavíkurborg`, `Eignasjóður Reykjavíkurborgar`, `Bílastæðasjóður` (codes `RK`, `ES`, `BS`).
-- 2017 onwards: Two funds (`ES`, `RK`) — `Eignasjóður fasteignastofa` and `Reykjavíkurborg`. Bílastæðasjóður was absorbed and now appears only as a division label (`samtala3='Bílastæðasjóður'`, `samtala0` starting with `Bílastæðasjóður …`, or equivalently `fyrirtaeki='Bílastæðasjóður'` on the ~24-row, near-zero-net 2018 transition remainder). Filter on those fields to reconstruct post-2017 BS figures.
-- Two separate schema changes, verified against the raw files: **2017** the header casing switched from UPPERCASE (`AR`, `FYRIRTAEKI`, `XFYRIRTAEKI`, `XTGR3`, `XEINING1`, `RAUN`, …) to lowercase, keeping the same column names (`fyrirtaeki`, `tgr1..3`, `eining1..5`, `þjon1..3`, `raun`); **2018** the columns themselves were restructured to `samtala1..4`/`samtala0`, `tegund1..4`/`tegund0`, `raun`. Queries spanning 2016→2017→2018 must handle all three shapes.
+**Coverage:** A-part only (tax-funded). Three funds: Reykjavíkurborg (Aðalsjóður), Eignasjóður fasteignastofa, Bílastæðasjóður. B-part entities (OR, Strætó, Félagsbústaðir, SORPA, etc.) are **not** included as buyers — but they appear as vendors when the A-part pays them.
 
 **Download URLs (latest years):**
 ```bash
@@ -215,26 +208,6 @@ ORDER BY raun DESC
 |------------|-------------|
 | `arsuppgjor` | Annual accounts A-part with vendor detail (2014-2025) |
 | `arsuppgjor-b-hluta-reykjavikurborgar` | Annual accounts section B (enterprises, no vendor detail) |
-
-### Financial — Aggregated Statements (older / frozen datasets)
-
-**Use this for:** Municipal income statements, balance sheets, and fund-specific KPIs before consolidation. **Note:** most of these STOP at 2017–2019 (when Bílastæðasjóður was merged into USK and reporting structure changed). For years after, compute aggregates from `arsuppgjor` transaction data.
-
-| Dataset ID | Description | Range | Notes |
-|------------|-------------|-------|-------|
-| `rekstrarreikningar` | City operating statements (tekjur/gjöld samtals, Sveitasjóður + Samantekin reikningsskil, in þús. kr.) | 2002–2017 | No sub-fund breakdown — city-level only. |
-| `efnahagsreikningar` | City balance sheets (eignir/skuldir, in þús. kr.) | 2002–2019 | City-level only. |
-| `lykiltolur_bilastaedasjods` | **Bílastæðasjóður key figures**: number of parking spots, fines issued, objections, avg revenue per spot, avg cost per spot, weekly chargeable hours | 2000–2017 | **Dataset frozen at 2017 — literal "revenue silence" on parking KPIs since the fund merged into USK.** |
-
-**Heads-up:** When someone asks about parking fund revenue, fines, or per-spot economics after 2017, these aggregated datasets **do not help**. Use `arsuppgjor` and filter where `samtala3='Bílastæðasjóður'` or `samtala0` contains 'Bílastæðasjóður', then sum `raun` (negative = revenue, positive = expense) to reconstruct the P&L yourself.
-
-**Example — Bílastæðasjóður P&L 2018–2024 from `arsuppgjor`:**
-```python
-# For each year's CSV, filter rows where samtala3 = 'Bílastæðasjóður'
-# Sum raun where raun < 0 → revenue; raun > 0 → expense; diff → surplus
-# 2024 result (verified against data/raw/reykjavik_accounts/uppg202412.csv):
-#   2,174.8 M revenue − 990.4 M expense = 1,184.4 M surplus
-```
 
 ### Population & Demographics
 | Dataset ID | Description | Verified |
@@ -404,12 +377,11 @@ mlr --icsv --ifs ';' --ocsv cat data/raw/reykjavik/file.csv
 | Þolandi | Victim |
 | Þjónustumiðstöð | Service center |
 
-## Evidence Integration
+## Example queries (DuckDB)
 
-SQL queries go in `/evidence-reports/sources/reykjavik/`:
+Population time series from raw data:
 
 ```sql
--- Example: Population time series from raw data
 SELECT
   Ár as year,
   Fjöldi as population
@@ -426,4 +398,3 @@ FROM read_csv('../data/processed/reykjavik_population.csv')
 ORDER BY year
 ```
 
-Run `npm run sources` to regenerate parquet files after updating CSVs.

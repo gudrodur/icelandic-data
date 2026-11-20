@@ -6,14 +6,19 @@ built yet, so they're safe to run on a fresh checkout.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import numpy as np
 import pytest
-import rasterio
+
+pytest.importorskip("numpy", reason="maps tier not installed (uv sync --group maps)")
+import numpy as np  # noqa: E402
+
+rasterio = pytest.importorskip("rasterio", reason="maps tier not installed (uv sync --group maps)")
 
 from scripts.utils.cache import (  # imported via tests/conftest.py adding REPO_ROOT
-    CONSTANTS_PATH, RASTERS_DIR, ROOT, sha256_file,
+    CONSTANTS_PATH,
+    RASTERS_DIR,
+    ROOT,
+    sha256_file,
 )
 
 LANDMASK = ROOT / "data" / "geodata" / "Landmask.geojson"
@@ -55,7 +60,7 @@ def test_cache_fingerprints_valid():
         if path.exists():
             assert sha256_file(path) == K["landmask"]["sha256"], \
                 f"{path} SHA-256 mismatch — rebuild cache"
-    for short, meta in (K.get("hrl_sources") or {}).items():
+    for _short, meta in (K.get("hrl_sources") or {}).items():
         seen_any = True
         path = ROOT / meta["source"]
         if path.exists():

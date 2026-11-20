@@ -16,19 +16,29 @@ Usage:
     uv run python scripts/housing_completions.py                        # fetch Hagstofan + build
     uv run python scripts/housing_completions.py fetch --use-cached     # reuse cached raw fetch
 
-HMS 2020–2025 figures are HARDCODED in HMS_COMPLETIONS (see --help); update
-them annually when HMS publishes the next housing plan report.
+HMS 2020–2025 figures come from `hms_housing_plans.py`, which parses the
+annual húsnæðisáætlanir workbook into
+data/processed/hms_husnaedisaaetlanir_completions_vs_need.csv. If that file
+is present it is used; otherwise the HARDCODED HMS_COMPLETIONS dict below is
+the fallback so this script still works standalone.
 """
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 
 import httpx
 import polars as pl
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hagstofan_query import BASE as PX_BASE  # noqa: E402
+from hagstofan_query import document_table, query_filters, record_fetch, write_sidecar  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 DST = ROOT / "data" / "processed" / "iceland_housing_completions.csv"
+SIDECAR = DST.with_suffix(".meta.json")  # Hagstofan table documentation, keyed by table code
+TABLE_DOCS: dict = {}
 RAW_HAG = ROOT / "data" / "raw" / "hagstofan" / "IDN03001_housing_completions.csv"
 HEADERS = {"User-Agent": "icelandic-data/1.0 (data toolkit fetcher)"}
 
@@ -36,6 +46,7 @@ HAGSTOFAN_URL = (
     "https://px.hagstofa.is/pxis/api/v1/is/"
     "Atvinnuvegir/idnadur/byggingar/IDN03001.px"
 )
+HAGSTOFAN_PATH = HAGSTOFAN_URL.removeprefix(PX_BASE)
 
 # Query: byggingarstaða=2 (Fullgert á árinu), eining=0 (Fjöldi íbúða)
 HAGSTOFAN_QUERY = {
@@ -47,8 +58,10 @@ HAGSTOFAN_QUERY = {
 }
 
 # HMS annual completions from húsnæðisáætlanir 2026/1 (sheet 2.1)
-# These should be updated annually when HMS publishes the next housing plan report.
-# Source: data/raw/hms/husnaedisaaetlanir_2025_skyrsla.md (April 2026 publication)
+# Preferred source is the parsed workbook CSV written by hms_housing_plans.py
+# (data/processed/hms_husnaedisaaetlanir_completions_vs_need.csv). This
+# HARDCODED dict is the fallback when that file is not present, so the script
+# still works standalone without running the parser first.
 HMS_COMPLETIONS = {
     2020: 3816,
     2021: 3220,
@@ -57,6 +70,34 @@ HMS_COMPLETIONS = {
     2024: 3637,
     2025: 3371,
 }
+
+# Parsed húsnæðisáætlanir completions-vs-need CSV (sheet 2.1) written by
+# `scripts/hms_housing_plans.py`. Read year -> completed_national from it.
+HMS_PROCESSED = ROOT / "data" / "processed" / "hms_husnaedisaaetlanir_completions_vs_need.csv"
+
+
+def load_hms_completions() -> dict[int, int] | None:
+    """Read year -> completed_national from the parsed workbook, or None if absent."""
+    if not HMS_PROCESSED.exists():
+        return None
+    df = pl.read_csv(HMS_PROCESSED)
+    if not {"year", "completed_national"} <= set(df.columns):
+        raise ValueError("HMS completions schema changed")
+    result = {}
+    for r in df.iter_rows(named=True):
+        year, count = r["year"], r["completed_national"]
+        if count is None:  # Forecast-only years are not completions.
+            continue
+        if year is None or int(year) != year or int(count) != count or count < 0:
+            raise ValueError("Invalid HMS completion year or count")
+        if year < 2020:
+            continue  # Preserve the documented Hagstofa/HMS boundary.
+        if int(year) in result:
+            raise ValueError("Duplicate HMS completion year")
+        result[int(year)] = int(count)
+    if not result:
+        raise ValueError("Present HMS file has no observed completions from 2020 onward")
+    return result
 
 
 def _parse_completions(text: str) -> dict[int, int]:
@@ -70,9 +111,17 @@ def _parse_completions(text: str) -> dict[int, int]:
 
 
 def fetch_hagstofan() -> dict[int, int]:
-    """Fetch Hagstofan completions 1970–2021 and cache the raw response."""
-    resp = httpx.post(HAGSTOFAN_URL, json=HAGSTOFAN_QUERY, timeout=30, headers=HEADERS)
-    resp.raise_for_status()
+    """Fetch Hagstofan completions 1970–2021 and cache the raw response.
+
+    Also fetches the table's px header (LAST-UPDATED, notes) with the same
+    selection into ``TABLE_DOCS`` and records the vintage in the shared
+    index; a header failure is reported and skipped, never fatal."""
+    with httpx.Client(timeout=60, headers=HEADERS) as client:
+        resp = client.post(HAGSTOFAN_URL, json=HAGSTOFAN_QUERY, timeout=30)
+        resp.raise_for_status()
+        doc = document_table(client, HAGSTOFAN_PATH, HAGSTOFAN_QUERY["query"], TABLE_DOCS)
+    record_fetch(HAGSTOFAN_PATH, query_filters(HAGSTOFAN_QUERY["query"]), "",
+                 doc["last_updated"] if doc else None, hashlib.sha256(resp.content).hexdigest())
     # CSV uses ISO-8859-1; decode from bytes
     text = resp.content.decode("iso-8859-1")
     RAW_HAG.parent.mkdir(parents=True, exist_ok=True)
@@ -101,15 +150,28 @@ def cmd_fetch(args) -> int:
         print("ERROR: no Hagstofan completions data — nothing written", file=sys.stderr)
         return 1
 
-    # Combine: Hagstofan 1970–2019, HMS 2020–2025 (prefer HMS where overlapping)
+    # HMS 2020–2025: prefer the parsed húsnæðisáætlanir CSV (from
+    # hms_housing_plans.py); fall back to the hardcoded dict so this still runs
+    # standalone. Prefer HMS where it overlaps with Hagstofan.
+    hms = load_hms_completions()
+    hms_src = "parsed húsnæðisáætlanir" if hms is not None else "hardcoded HMS_COMPLETIONS"
+    if hms is not None:
+        missing = sorted(HMS_COMPLETIONS.keys() - hms.keys())
+        if missing:
+            print(f"Retaining historical HMS reference values for {missing}")
+        hms = {**HMS_COMPLETIONS, **hms}
+    else:
+        hms = HMS_COMPLETIONS
+    print(f"HMS completions: {hms_src}  ({len(hms)} years)")
+
     combined = {y: v for y, v in hag.items() if y <= 2019}
-    for y, v in HMS_COMPLETIONS.items():
+    for y, v in hms.items():
         combined[y] = v
 
     # Report overlap for sanity
     print("\nOverlap check:")
     for y in [2020, 2021]:
-        h, m = hag.get(y), HMS_COMPLETIONS.get(y)
+        h, m = hag.get(y), hms.get(y)
         print(f"  {y}: Hagstofan={h}, HMS={m}, Δ={(m - h) if h and m else 'N/A'}")
 
     df = pl.DataFrame(
@@ -126,6 +188,9 @@ def cmd_fetch(args) -> int:
     DST.parent.mkdir(parents=True, exist_ok=True)
     df.write_csv(DST)
     print(f"\nWrote {len(df)} years to {DST}")
+    if TABLE_DOCS:  # --use-cached made no request, so leave the previous sidecar alone
+        write_sidecar(SIDECAR, TABLE_DOCS)
+        print(f"Wrote table documentation to {SIDECAR}")
 
     # Recent summary
     print("\nRecent completions:")
@@ -140,10 +205,13 @@ def cmd_fetch(args) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
-        epilog=("NOTE: HMS completions for 2020–2025 are HARDCODED in HMS_COMPLETIONS "
-                "from sheet 2.1 of the annual húsnæðisáætlanir report — update them by "
-                "hand whenever HMS publishes the next housing plan, or the tail of the "
-                "series silently stops moving. Hagstofan IDN03001 froze after 2021."),
+        epilog=("NOTE: HMS completions for 2020–2025 are read from the parsed "
+                "húsnæðisáætlanir CSV (data/processed/hms_husnaedisaaetlanir_"
+                "completions_vs_need.csv, written by hms_housing_plans.py) when that "
+                "file exists; otherwise it falls back to the HARDCODED HMS_COMPLETIONS "
+                "dict. Run `uv run python scripts/hms_housing_plans.py` first to keep the "
+                "tail of the series moving as HMS publishes new housing plans. "
+                "Hagstofan IDN03001 froze after 2021."),
     )
     sub = ap.add_subparsers(dest="cmd")
     f = sub.add_parser(

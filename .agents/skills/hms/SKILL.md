@@ -1,9 +1,11 @@
 ---
 name: hms
-description: HMS property registry — kaupskrá fasteigna (222k geocoded property transactions) and landeignaskrá (89k land parcels with polygons).
+description: HMS — kaupskrá fasteigna (222k transactions), landeignaskrá parcels, kaup/leiguvísitala price-rent indices, húsnæðisáætlanir housing plans.
 ---
 
 # HMS - Húsnæðis- og mannvirkjastofnun
+
+**Requires:** Tier 0 (core). The landeignaskrá shapefile build needs Tier 1 (maps); mánaðarskýrsla discovery needs Tier 2 (browser).
 
 Property registry and housing market data from Iceland's Housing and Construction Authority.
 
@@ -13,7 +15,19 @@ Property registry and housing market data from Iceland's Housing and Constructio
 
 **URL:** `https://frs3o1zldvgn.objectstorage.eu-frankfurt-1.oci.customer-oci.com/n/frs3o1zldvgn/b/public_data_for_download/o/kaupskra.csv`
 
-**Format:** CSV (semicolon delimited, ISO-8859-1 encoded)
+**Format:** CSV (semicolon delimited, **ISO-8859-1 encoded**)
+
+**Local file:** `data/raw/hms/kaupskra_utf8.csv` — the raw download re-decoded to
+UTF-8. Fetch + convert + freshness report with `scripts/kaupskra_fetch.py`:
+
+```bash
+uv run python scripts/kaupskra_fetch.py          # download, convert Latin-1→UTF-8, report
+uv run python scripts/kaupskra_fetch.py report   # re-report an existing copy
+```
+
+The download is staged, decoded and schema-checked before replacing the UTF-8
+copy. Original Latin-1 bytes are retained in `data/raw/hms/kaupskra.csv`. The script prints the row count and newest
+`THINGLYSTDAGS` — if the newest is months old, refresh.
 
 **Update frequency:** Daily
 
@@ -81,10 +95,10 @@ Includes all kaupskra fields plus:
 
 ```bash
 # Summary stats
-duckdb -c "SELECT count(*), count(lat), median(kaupverd*1000/einflm_m2) FROM 'data/processed/kaupskra_geocoded.parquet' WHERE NOT onothaefur AND tegund='Fjölbýli'"
+uv run python scripts/sql.py "SELECT count(*), count(lat), median(kaupverd*1000/einflm_m2) FROM 'data/processed/kaupskra_geocoded.parquet' WHERE NOT onothaefur AND tegund='Fjölbýli'"
 
 # Recent Reykjavík sales
-duckdb -c "SELECT heimilisfang, kaupverd*1000 as kr, einflm_m2 FROM 'data/processed/kaupskra_geocoded.parquet' WHERE postnr BETWEEN 101 AND 128 AND kaupsamningur_dags >= '2024-01-01' ORDER BY kaupsamningur_dags DESC LIMIT 20"
+uv run python scripts/sql.py "SELECT heimilisfang, kaupverd*1000 as kr, einflm_m2 FROM 'data/processed/kaupskra_geocoded.parquet' WHERE postnr BETWEEN 101 AND 128 AND kaupsamningur_dags >= '2024-01-01' ORDER BY kaupsamningur_dags DESC LIMIT 20"
 ```
 
 ## Landeignaskrá (Land Parcel Registry)
@@ -145,6 +159,109 @@ Most recent counts (March 2025): **7,181 units under construction**, 69.7% in th
 - [hagstofan](../hagstofan/SKILL.md) table FAS01302 — completed dwellings by year (historical, not real-time).
 - [skipulagsmal](../skipulagsmal/SKILL.md) — Planitor building-permit data (case-level, 5 municipalities).
 
+## Kaupvísitala og Leiguvísitala (Price & Rent Indices)
+
+The visitala page (`https://hms.is/gogn-og-maelabord/visitolur`) is behind a
+**Vercel anti-bot checkpoint**, so `curl`/`httpx` get the challenge HTML. **Do
+not** scrape it — the two CSVs it links sit on public object storage and fetch
+directly:
+
+- `https://frs3o1zldvgn.objectstorage.eu-frankfurt-1.oci.customer-oci.com/n/frs3o1zldvgn/b/public_data_for_download/o/kaupvisitala.csv`
+- `https://frs3o1zldvgn.objectstorage.eu-frankfurt-1.oci.customer-oci.com/n/frs3o1zldvgn/b/public_data_for_download/o/leiguvisitala.csv`
+
+`scripts/hms_indices.py` downloads them (`fetch`) and builds the merged
+rebased index (`process`, bare run):
+
+```bash
+uv run python scripts/hms_indices.py fetch    # → data/raw/hms/indices/{kaup,leigu}visitala.csv
+uv run python scripts/hms_indices.py          # → data/processed/hms_rent_vs_price_index.csv
+```
+
+**Columns:** `UTGAFUDAGUR` (publication date — blank on old kaupvísitala rows),
+`AR`, `MANUDUR`, `VISITALA`, then regional splits. The kaupvísitala file has
+regional breakdowns; the leiguvísitala CSV is **capital area only** (höfuðborgarsvæðið,
+new contracts) — see the coverage correction below. Note the
+monthly publication cadence: the newest `UTGAFUDAGUR` can lag a
+month or two.
+
+**Vintage caveat — the rent index is revised wholesale every release.** Every
+row of `leiguvisitala.csv` carries the same `UTGAFUDAGUR` (the latest release
+date), i.e. HMS republishes and restamps the entire back-series each month,
+and values for earlier months move. The kaupvísitala file, by contrast, keeps
+one `UTGAFUDAGUR` per month (blank before 2022). `hms_indices.py fetch`
+therefore writes `data/raw/hms/indices/indices.meta.json` (HTTP Last-Modified,
+ETag, newest `UTGAFUDAGUR`) and snapshots each release to
+`data/raw/hms/indices/releases/{name}.{date}.csv`; the processed CSV carries
+`price_published` / `rent_published` per row. Quote a rent-index value with
+its `rent_published` date, and diff two release snapshots before claiming a
+month-on-month change.
+
+## Mánaðarskýrsla (Monthly Housing-Market Report)
+
+**Listing:** `https://hms.is/skyrslur` → report pages `manadarskyrsla-{month}-{year}`
+(older slugs use a 2-digit year, e.g. `manadarskyrsla-agust-25`). Released late
+in the month (October 2026 issue: 22 Oct) with a news post under `/frettir/`.
+
+Web-native report (no PDF) plus one workbook, "Myndir að baki mánaðarskýrslu":
+figure sheets `FM.*` (fasteignamarkaður), `LEIGA.*`, `LM.*` (lánamarkaður),
+`BM.*` (byggingarmarkaður), and one manifest sheet per section (figure id →
+title). Row 1 of a figure sheet is its title and row 2 usually the header; the
+script skips a subtitle row (BM.3) and names columns `colN` when there is no
+header (BM.6), so check a one-off figure's CSV header before trusting it. Each issue has
+its own theme and figure set (September and October 2026 share only FM.1–FM.2),
+so ids mean nothing across workbooks — match on the title in `figures.csv`.
+
+The workbook sits on Prismic's CDN under a random asset id, so its URL must be
+read off the (Vercel-guarded) report page; `scripts/hms_manadarskyrsla.py` does
+that with headless Chromium and archives each month with the rendered page text:
+
+```bash
+uv run python scripts/hms_manadarskyrsla.py list      # mánaðarskýrslur on the listing page
+uv run python scripts/hms_manadarskyrsla.py           # fetch newest -> data/raw/hms/manadarskyrsla/{YYYY-MM}/
+uv run python scripts/hms_manadarskyrsla.py fetch manadarskyrsla-september-2026
+uv run python scripts/hms_manadarskyrsla.py process   # -> data/processed/hms_manadarskyrsla/{YYYY-MM}/{sheet}.csv
+```
+
+Gotchas: the newest month of kaupsamningar (FM.1) is preliminary — þinglýsing
+lags, so it is revised up the following month. Shares are fractions (0.035), but
+LM.3 is in percent (35.0). No health probe: hms.is answers httpx with the
+checkpoint page and the CDN URL cannot be predicted. `page.txt` length varies
+between renders of the same issue, so don't diff it to detect revisions; diff the
+workbook CSVs.
+
+## Húsnæðisáætlanir (Housing Plans)
+
+Annual published workbook with the authoritative housing-policy numbers:
+completions vs the HMS "real need" band, non-market rental waitlists by
+category, and buildable-plot availability by region. Sheet map:
+
+| Sheet | Contents |
+|-------|----------|
+| `2.1` | Annual completions + forecast band (Miðspá / Spábil neðri/efri mörk), all Iceland |
+| `3.1` / `3.2` | "Real need" lower/upper bounds, national and capital area |
+| `4.2` | Plot availability ratio to the labelled need year, by region |
+| `5.2` | Non-market rental waitlists by category, by year |
+
+**Source page:** `https://hms.is/skyrslur/husnaedisaaetlanir` (the annual
+workbook `husnaedisaaetlanir_<year>_gogn.xlsx` is linked here, but the page is
+Vercel-guarded — download by hand into `data/raw/hms/`). The script parses the
+workbook into three processed CSVs:
+
+```bash
+uv run python scripts/hms_housing_plans.py            # parse the newest local workbook
+uv run python scripts/hms_housing_plans.py --year 2026
+uv run python scripts/hms_housing_plans.py list       # what workbooks are local
+```
+
+Outputs: `data/processed/hms_husnaedisaaetlanir_{completions_vs_need,
+nonmarket_rental_waitlist,plot_availability_by_region}.csv`. Sheet 2.1's
+completed-dwellings feed `scripts/housing_completions.py` automatically (it
+reads observed counts from the parsed CSV, retaining historical reference
+counts for years absent from a newer workbook). Forecast-only rows are not
+completions. Plot output includes `need_year`, taken from the sheet header.
+The workbook remains a manual input; these changes do not automate discovery
+or downloading of future annual reports.
+
 ## License
 
 Open data, attribution required: "Byggir á upplýsingum frá Húsnæðis- og mannvirkjastofnun"
@@ -153,3 +270,11 @@ Open data, attribution required: "Byggir á upplýsingum frá Húsnæðis- og ma
 
 - [iceaddr](https://github.com/sveinbjornt/iceaddr) - Icelandic address geocoding
 - [Kaupverðsjá](https://hms.is/gogn-og-maelabord/maelabordfasteignaskra/kaupverdsja) - HMS interactive price viewer
+
+## Public CSV download CLI
+
+`scripts/hms_public.py kaupvisitala|leiguvisitala|kaupskra --out /path/output.csv` downloads public object-storage files and archives original bytes by hash. Index CSVs are UTF-8; purchase registry is converted from ISO-8859-1. This does not apply market filters or infer completed/unsold housing.
+
+## Public rent index coverage correction
+
+`leiguvisitala.csv` covers capital-area market rents in recent contracts, not a national rent index. `hms_indices.py` attaches rent only to `capital_area`. Do not compare its geographic coverage silently with the national purchase index. HMS: "Leiguvísitala HMS er einungis fyrir höfuðborgarsvæðið" (verified 2026-11-14), https://hms.is/frettir/visitolur-hms-eru-olikar-maelingum-hagstofu-islands-a-husnaediskostnadi

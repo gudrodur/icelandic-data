@@ -9,12 +9,10 @@ from __future__ import annotations
 import base64
 import json
 import re
-from pathlib import Path
 
 import pytest
 
 from scripts import vernd as v
-
 
 # --------------------------------------------------------------------------
 # Fast unit tests

@@ -55,9 +55,9 @@ PROBES = [
     "energy", "ferdamalastofa", "fiskistofa", "fjarlog", "fuel", "gengi", "hafogvatn", "hagstofan", "heimsmarkmid",
     "eurostat",
     "hms", "housing_completions", "income_distribution", "landlaeknir", "lanamal", "laun", "lmi", "lmi_hrl", "loftgaedi",
-    "maelabord_landbunadarins", "maskina", "nasdaq", "natt", "opnirreikningar",
+    "maelabord_landbunadarins", "maskina", "nasdaq", "opnirreikningar",
     "reykjavik", "rikisreikningur", "samgongustofa", "sedlabanki", "sedlabanki_fx", "skatturinn",
-    "skipulagsmal", "skodanakannanir", "tekjusagan", "tenders", "umferd", "vedur",
+    "skipulagsmal", "skodanakannanir", "tekjusagan", "tenders", "umferd", "utbod_reykjavik", "vedur",
     "ust_gis", "velsaeldarvisar", "vernd", "vinnumalastofnun",
 ]
 
@@ -68,7 +68,7 @@ def dot(color: str, label: str) -> str:
     """One 12px light. Plain shapes only — GitHub sanitises SVG and camo-proxies it."""
     r = SIZE / 2 - 1
     return (
-        f'<svg xmlns="http://www.w' f'3.org/2000/svg" width="{SIZE}" height="{SIZE}" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SIZE}" height="{SIZE}" '
         f'viewBox="0 0 {SIZE} {SIZE}" role="img" aria-label="{label}">'
         f'<circle cx="{SIZE / 2}" cy="{SIZE / 2}" r="{r}" fill="{color}"/>'
         f"</svg>\n"

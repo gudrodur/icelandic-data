@@ -12,9 +12,13 @@ Usage:
 import argparse
 import asyncio
 import base64
+import hashlib
+import io
 import json
+import math
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -30,52 +34,8 @@ POWERBI_TENANT = "764a306d-0a68-45ad-9f07-6f1804447cd4"
 POWERBI_REPORT_KEY = "e74521bb-e501-4b02-8aa2-08a8bb84d087"
 POWERBI_PAGE = "ReportSection7e7dca64570c18a74eb9"
 
-# Contentful serves each upload at a fresh, content-addressed asset URL — the
-# old one keeps working forever, so a stale constant here silently pins us to an
-# old workbook rather than 404ing. The workbook is published monthly, so the URL
-# rotates monthly: EXCEL_URL is only the fallback for when LANDING cannot be
-# reached or links no workbook. cmd_excel resolves the current link from LANDING
-# at run time; tests/health/test_vinnumalastofnun.py does NOT pin it: it checks that link
-# discovery still finds a workbook on LANDING and that the link serves one.
+# Resolve the current upload every time: old Contentful assets keep serving 200.
 LANDING = "https://island.is/s/vinnumalastofnun/maelabord-og-toelulegar-upplysingar"
-EXCEL_URL = (
-    "https://assets.ctfassets.net/8k0h54kbe6bj/6gixO2P4GNuFy7wwTY5ZkE/"
-    "9abbb476210aab3ee0fadffcfda80566/Talnagogn_atvinnuleysi.xlsm"
-)
-
-_ASSET_RE = re.compile(r"https://assets\.ctfassets\.net/[\w/-]+\.xlsm")
-
-
-def discover_workbook_urls(page_html: str) -> set[str]:
-    """Contentful .xlsm workbook links in a landing page body (shared with the health probe)."""
-    return set(_ASSET_RE.findall(page_html))
-
-
-def resolve_excel_url(client: httpx.Client | None = None) -> str:
-    """Current workbook URL from LANDING, EXCEL_URL when undiscoverable.
-
-    Prefers EXCEL_URL while the page still links it, so a reordered page does
-    not flip the download to a different workbook unannounced.
-    """
-    try:
-        if client is None:
-            with httpx.Client(timeout=60, follow_redirects=True) as c:
-                r = c.get(LANDING)
-                r.raise_for_status()
-                linked = discover_workbook_urls(r.text)
-        else:
-            r = client.get(LANDING)
-            r.raise_for_status()
-            linked = discover_workbook_urls(r.text)
-    except Exception as e:
-        print(f"could not resolve current workbook from {LANDING} ({e}); using fallback", file=sys.stderr)
-        return EXCEL_URL
-    if not linked:
-        print(f"no workbook link on {LANDING}; using fallback", file=sys.stderr)
-        return EXCEL_URL
-    if EXCEL_URL in linked:
-        return EXCEL_URL
-    return sorted(linked)[0]
 
 
 def _embed_url() -> str:
@@ -84,16 +44,96 @@ def _embed_url() -> str:
     return f"https://app.powerbi.com/view?r={token}&pageName={POWERBI_PAGE}"
 
 
+def resolve_excel(html):
+    # Contentful renamed the asset (Talnagogn_atvinnuleysi.xlsm ->
+    # Talnagogn_atvinnuleysi_.xlsm) while the old URL kept serving 200, so the
+    # exact-name pattern silently matched nothing. Anchor on the stem instead.
+    urls = set(re.findall(r'https://assets\.ctfassets\.net/[^\s"<>]+?/Talnagogn_atvinnuleysi[^\s"<>/]*?\.xlsm', html.replace('\\/', '/')))
+    if len(urls) != 1:
+        raise ValueError(f"Expected one current unemployment workbook, found {len(urls)}")
+    return urls.pop()
+
+
+def download_excel():
+    with httpx.Client(timeout=90, follow_redirects=True) as client:
+        page = client.get(LANDING)
+        page.raise_for_status()
+        url = resolve_excel(page.text)
+        response = client.get(url)
+        response.raise_for_status()
+    return url, response.content
+
+
+def parse_records(payload):
+    """Source-native G2 monthly rates and G4 month-end duration, without macros."""
+    from openpyxl import load_workbook
+    book = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
+    records = []
+    try:
+        for sheet in ['G2', 'G4']:
+            dates = {}; measure = None; group = None
+            for cells in book[sheet].iter_rows(values_only=True):
+                header = {i: v.strftime('%Y-%m') for i, v in enumerate(cells) if isinstance(v, datetime)}
+                if header:
+                    if len(set(header.values())) != len(header):
+                        raise ValueError('Duplicate workbook months')
+                    dates = header
+                    continue
+                labels = [str(v).strip() for v in cells[:3] if v is not None]
+                title = ' '.join(labels)
+                if sheet == 'G2':
+                    if title == 'Atvinnuleysi %': measure = 'rate'; continue
+                    if 'Atvinnulausir, meðalfjöldi' in title: measure = None; continue
+                    if not measure or not cells[0]: continue
+                    group = str(cells[0]).strip(); label = group
+                else:
+                    if 'Atvinnulausir eftir lengd á skrá' in title: measure = 'duration'; continue
+                    if measure != 'duration': continue
+                    if cells[0] is not None: group = str(cells[0]).strip()
+                    label = str(cells[1]).strip() if cells[1] is not None else ''
+                    if label not in ['Allir', 'Karlar', 'Konur', '0-6 mánuðir', '6-12 mánuðir', '+12 mánuðir']: continue
+                for column, date in dates.items():
+                    value = cells[column] if column < len(cells) else None
+                    if value is None: continue
+                    if not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
+                        raise ValueError(f'Invalid {sheet} value at {date}: {value!r}')
+                    if measure == 'rate' and value > 1: raise ValueError('Expected fractional rates')
+                    records.append(dict(date=date, measure=measure, group=group, label=label,
+                                        value=value * 100 if measure == 'rate' else value,
+                                        unit='%' if measure == 'rate' else 'persons'))
+    finally:
+        book.close()
+    keys = [(r['date'], r['measure'], r['group'], r['label']) for r in records]
+    if not records or len(set(keys)) != len(keys): raise ValueError('Empty or duplicate records')
+    for measure in ['rate', 'duration']:
+        if not any(r['measure'] == measure for r in records): raise ValueError(f'Missing {measure}')
+    national = [r for r in records if r['measure'] == 'duration' and r['group'] == 'Landið allt']
+    latest = max(r['date'] for r in national)
+    values = {r['label']: r['value'] for r in national if r['date'] == latest}
+    if set(values) != {'Allir', '0-6 mánuðir', '6-12 mánuðir', '+12 mánuðir'}:
+        raise ValueError('Incomplete latest national duration data')
+    if abs(values['Allir'] - sum(values[k] for k in values if k != 'Allir')) > .01:
+        raise ValueError('Duration bands do not reconcile')
+    return sorted(records, key=lambda r: (r['date'], r['measure'], r['group'], r['label']))
+
+
 def cmd_excel(args=None):
+    url, payload = download_excel()
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    out = RAW_DIR / "Talnagogn_atvinnuleysi.xlsm"
-    url = resolve_excel_url()
-    print(f"Downloading {url}", file=sys.stderr)
-    with httpx.Client(timeout=60, follow_redirects=True) as c:
-        r = c.get(url)
-        r.raise_for_status()
-        out.write_bytes(r.content)
-    print(f"  → {out} ({len(r.content):,} bytes)", file=sys.stderr)
+    (RAW_DIR / 'Talnagogn_atvinnuleysi.xlsm').write_bytes(payload)
+    print(url, file=sys.stderr)
+
+
+def cmd_records(args):
+    url, payload = download_excel()
+    rows = parse_records(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    (RAW_DIR / f'{digest}.xlsm').write_bytes(payload)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    temp = args.out.with_suffix('.tmp')
+    temp.write_text(json.dumps(dict(source=LANDING, source_urls=[url], raw_sha256=digest, rows=rows), ensure_ascii=False, allow_nan=False), encoding='utf-8')
+    temp.replace(args.out)
 
 
 async def _scrape_powerbi() -> list[dict]:
@@ -142,6 +182,10 @@ def main():
     for name, fn in [("fetch", cmd_fetch), ("excel", cmd_excel), ("powerbi", cmd_powerbi)]:
         p = sub.add_parser(name)
         p.set_defaults(func=fn)
+    p = sub.add_parser('records')
+    p.add_argument('--out', type=Path,
+                   default=RAW_DIR.parent.parent / 'processed' / 'vinnumalastofnun_records.json')
+    p.set_defaults(func=cmd_records)
     args = ap.parse_args()
     args.func(args)
 

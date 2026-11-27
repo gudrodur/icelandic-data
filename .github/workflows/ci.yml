@@ -12,12 +12,17 @@ concurrency:
 jobs:
   lint:
     name: Lint (ruff — errors only, no warnings tier)
-    # On the self-hosted iceland runner (labels `self-hosted` + `iceland`, the mini that runs the
+    # On the self-hosted iceland runner (labels `self-hosted` + `iceland`, the box that runs the
     # health probes): the account's spending limit is 0, so a GitHub-hosted job does not start at
     # all until the cycle resets (2026-12-01). The matrix below stays hosted on purpose — it is
     # the cross-platform claim — and the hosted dead-man's switch (source-health-fallback.yml)
     # stays hosted on purpose too: a failover must not run on the box it watches. Both wait for
     # the reset; this job does not.
+    #
+    # This repository is public, so a pull request from a fork would otherwise check out and run
+    # arbitrary code on the box, credentials and all. Same-repo branches and pushes still run here;
+    # a fork's lint waits for the hosted lane rather than executing on the runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, iceland]
     timeout-minutes: 5
     steps:

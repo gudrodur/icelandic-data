@@ -12,7 +12,13 @@ concurrency:
 jobs:
   lint:
     name: Lint (ruff — errors only, no warnings tier)
-    runs-on: ubuntu-latest
+    # On the self-hosted iceland runner (labels `self-hosted` + `iceland`, the mini that runs the
+    # health probes): the account's spending limit is 0, so a GitHub-hosted job does not start at
+    # all until the cycle resets (2026-12-01). The matrix below stays hosted on purpose — it is
+    # the cross-platform claim — and the hosted dead-man's switch (source-health-fallback.yml)
+    # stays hosted on purpose too: a failover must not run on the box it watches. Both wait for
+    # the reset; this job does not.
+    runs-on: [self-hosted, iceland]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
